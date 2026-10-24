@@ -108,7 +108,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
 - [ ] **P1.6 Contrats d'assurance (côté assureur)**
   - Dépend de : P1.5
   - Livre : table `insurance_plans` (assureur, nom du régime, taux de couverture par défaut,
-    plafond annuel, ticket modérateur), CRUD réservé à `insurer_manager`.
+    plafond annuel, ticket modérateur), CRUD sous une nouvelle permission
+    `insurance_plan.manage` (rôle `insurer_manager`).
   - Acceptation : un assureur ne voit et ne modifie que ses propres régimes.
 
 - [ ] **P1.7 Conventions centre ↔ assureur**
@@ -142,14 +143,16 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     a créé le patient, pris un rendez-vous ou fait une consultation pour lui (table
     `patient_center_links`). Détection de doublon probable (même nom + même date de naissance)
     avant création.
-  - Acceptation : `reception` crée et modifie l'administratif ; `billing` et `center_admin`
-    lisent l'administratif ; aucun rôle assureur n'accède à cette route ; chaque création et
-    modification est auditée avec avant/après.
+  - Acceptation : `reception` crée (`patient.create`) et modifie (nouvelle permission
+    `patient.update`) l'administratif ; tout rôle ayant `patient.read_admin` le lit ; aucun
+    rôle assureur n'accède à cette route ; chaque création et modification est auditée avec
+    avant/après.
 
 - [ ] **P2.2 Affiliations** (en cours)
   - Dépend de : P2.1, P1.6 (à défaut, régime saisi en texte libre puis migré)
   - Livre : table `affiliations` (patient, assureur, régime, numéro d'assuré, statut titulaire
-    ou ayant droit, titulaire lié, employeur, début, fin) ; ajout par l'accueil, validation par
+    ou ayant droit, titulaire lié, employeur, début, fin) ; ajout par l'accueil
+    (`patient.update`, l'affiliation fait partie de l'administratif), validation par
     l'assureur (`insured.manage`) ; `GET .../patients/:id/affiliations` ; la recherche de
     patients (P2.1) trouve aussi par numéro d'assuré.
   - Acceptation : une affiliation n'est « active » qu'entre ses dates et une fois validée ;
