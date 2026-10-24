@@ -64,7 +64,7 @@ export async function findDuplicates(
     .limit(10);
   return {
     duplicates: rows.map(({ nationalId, ...rest }) => rest),
-    sameNationalId: rows.some((r) => r.nationalId === input.nationalId),
+    sameNationalId: !!input.nationalId && rows.some((r) => r.nationalId === input.nationalId),
   };
 }
 

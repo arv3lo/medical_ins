@@ -40,4 +40,11 @@ describe('updatePatientInputSchema', () => {
     expect(updatePatientInputSchema.safeParse({ phone: '034 12 345 67' }).success).toBe(true);
     expect(updatePatientInputSchema.safeParse({}).success).toBe(false);
   });
+
+  it('clears an optional field sent as null', () => {
+    expect(updatePatientInputSchema.parse({ phone: null, nationalId: null })).toEqual({
+      phone: null,
+      nationalId: null,
+    });
+  });
 });

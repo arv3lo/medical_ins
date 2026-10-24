@@ -10,7 +10,8 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format AAAA-MM-JJ')
   .refine((value) => !Number.isNaN(Date.parse(value)), 'Date invalide');
 
-const optionalText = (max: number) => z.string().trim().max(max).optional();
+/** Absent leaves the field as it is; null clears it (an emptied form field). */
+const optionalText = (max: number) => z.string().trim().max(max).nullish();
 
 const patientFields = {
   lastName: z.string().trim().min(1).max(100),
@@ -25,7 +26,7 @@ const patientFields = {
     .string()
     .transform((value) => value.replace(/\s/g, ''))
     .pipe(z.string().regex(/^\d{12}$/, 'Le CIN compte 12 chiffres'))
-    .optional(),
+    .nullish(),
   phone: optionalText(30),
   address: optionalText(500),
   region: optionalText(100),

@@ -232,4 +232,31 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ message: 'Un patient existe déjà avec ce CIN' });
   });
+
+  it('clears an optional field sent as null, with the change in the audit', async () => {
+    const reception = await as('reception', centerA);
+    const patient = (await create(centerA, reception)).json<{ id: string }>();
+
+    const response = await update(centerA, patient.id, reception, {
+      phone: null,
+      nationalId: null,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ phone: null, nationalId: null });
+
+    const [entry] = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'patient.update'));
+    expect(entry!.before).toMatchObject({ phone: '034 12 345 67' });
+    expect(entry!.after).toMatchObject({ phone: null, nationalId: null });
+  });
+
+  it('does not take a homonym without CIN for a CIN conflict', async () => {
+    const reception = await as('reception', centerA);
+    await create(centerA, reception, { ...rakoto, nationalId: null });
+    const response = await create(centerA, reception, { ...rakoto, nationalId: null });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ sameNationalId: false });
+  });
 });
