@@ -11,9 +11,14 @@ export const createOrganizationInputSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationInputSchema>;
 
+/** An organization as the API returns it: absent optional fields come back as null. */
 export const organizationSchema = createOrganizationInputSchema.extend({
   id: z.string().uuid(),
+  taxId: z.string().nullable(),
+  region: z.string().nullable(),
+  address: z.string().nullable(),
   createdAt: z.string(),
+  updatedAt: z.string(),
 });
 export type Organization = z.infer<typeof organizationSchema>;
 
