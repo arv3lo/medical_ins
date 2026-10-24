@@ -1,7 +1,7 @@
 import type { Role } from '@medical-ins/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, organizations, users } from '../src/db/schema.js';
+import { appointments, auditLogs, organizations, users } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helpers.js';
 
 /** Far enough ahead that "in the past" never applies by accident. */
@@ -77,6 +77,25 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
     cookie: string,
     payload?: object,
   ) => ctx.app.inject({ method, url, headers: { cookie }, payload });
+
+  /** Writes an appointment straight to the table, for times the API refuses to book (the past). */
+  async function insertAppointment(startsAt: Date) {
+    const [row] = await ctx.db
+      .insert(appointments)
+      .values({
+        organizationId: center,
+        patientId,
+        doctorId,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 20 * 60_000),
+        durationMinutes: 20,
+      })
+      .returning();
+    return row!.id;
+  }
+
+  const auditOf = (action: string) =>
+    ctx.db.select().from(auditLogs).where(eq(auditLogs.action, action));
 
   it('lets reception book an appointment with a doctor of the center, audited', async () => {
     const response = await book();
@@ -191,5 +210,61 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
     const doctors = await inject('GET', `/api/organizations/${center}/doctors`, reception);
     const [doctor] = await ctx.db.select().from(users).where(eq(users.id, doctorId));
     expect(doctors.json()).toEqual([{ id: doctorId, fullName: doctor!.fullName }]);
+  });
+
+  it('never moves a past appointment', async () => {
+    const id = await insertAppointment(new Date(Date.now() - 3_600_000));
+    const moved = await inject('PATCH', `${base()}/${id}`, reception, { startsAt: at('11:00') });
+    expect(moved.statusCode).toBe(400);
+  });
+
+  it('refuses to reschedule to a doctor of another center, or to a member who is not a doctor', async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    await as('nurse', center);
+    const nurseId = await userIdOf(`nurse.${center.slice(0, 8)}`);
+    for (const id of [otherDoctorId, nurseId]) {
+      const moved = await inject('PATCH', `${base()}/${appointment.id}`, reception, {
+        doctorId: id,
+      });
+      expect(moved.statusCode).toBe(400);
+    }
+    expect((await book({ doctorId: nurseId })).statusCode).toBe(400);
+  });
+
+  it("hides one center's appointments from another center", async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    const receptionB = await as('reception', otherCenter);
+    const elsewhere = `/api/organizations/${otherCenter}/appointments/${appointment.id}`;
+    expect(
+      (await inject('PATCH', elsewhere, receptionB, { startsAt: at('11:00') })).statusCode,
+    ).toBe(404);
+    expect(
+      (await inject('POST', `${elsewhere}/status`, receptionB, { status: 'cancelled' })).statusCode,
+    ).toBe(404);
+    const listed = await inject(
+      'GET',
+      `/api/organizations/${otherCenter}/appointments?patientId=${patientId}`,
+      receptionB,
+    );
+    expect(listed.json()).toEqual([]);
+  });
+
+  it('audits reschedules and status changes', async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    await inject('PATCH', `${base()}/${appointment.id}`, reception, { startsAt: at('11:00') });
+    await inject('POST', `${base()}/${appointment.id}/status`, reception, { status: 'cancelled' });
+
+    const [moved] = await auditOf('appointment.reschedule');
+    expect(moved).toMatchObject({
+      entityId: appointment.id,
+      before: { startsAt: '2099-11-03T06:00:00.000Z' },
+      after: { startsAt: '2099-11-03T08:00:00.000Z' },
+    });
+    const [cancelled] = await auditOf('appointment.cancelled');
+    expect(cancelled).toMatchObject({
+      entityId: appointment.id,
+      before: { status: 'scheduled' },
+      after: { status: 'cancelled' },
+    });
   });
 });
