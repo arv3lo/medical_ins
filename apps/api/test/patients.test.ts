@@ -1,8 +1,15 @@
 import type { Role } from '@medical-ins/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, memberships, organizations, patients } from '../src/db/schema.js';
-import { TEST_DATABASE_URL, createUser, login, resetDb, setupTestApp } from './helpers.js';
+import { auditLogs, organizations, patients } from '../src/db/schema.js';
+import {
+  TEST_DATABASE_URL,
+  createUser,
+  login,
+  memberCookie,
+  resetDb,
+  setupTestApp,
+} from './helpers.js';
 
 const rakoto = {
   lastName: 'Rakoto',
@@ -36,13 +43,8 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
     [centerA, centerB, insurer] = rows.map((o) => o.id) as [string, string, string];
   });
 
-  /** Creates an account with `role` in `organizationId` and returns its Cookie header. */
-  async function as(role: Role, organizationId: string) {
-    const email = `${role}.${organizationId.slice(0, 8)}@example.mg`;
-    const user = await createUser(ctx.db, { email, password: 'pass-12345' });
-    await ctx.db.insert(memberships).values({ userId: user.id, organizationId, role });
-    return (await login(ctx.app, email, 'pass-12345')).cookie;
-  }
+  const as = (role: Role, organizationId: string) =>
+    memberCookie(ctx.app, ctx.db, role, organizationId);
 
   const create = (orgId: string, cookie: string, payload: Record<string, unknown> = rakoto) =>
     ctx.app.inject({

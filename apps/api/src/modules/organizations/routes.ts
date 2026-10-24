@@ -29,6 +29,16 @@ export function organizationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       .orderBy(organizations.name);
   });
 
+  /** Every signed-in user may pick an insurer, e.g. when declaring a patient's affiliation. */
+  app.get('/api/insurers', async (request) => {
+    requireUser(request);
+    return db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.type, 'insurer'))
+      .orderBy(organizations.name);
+  });
+
   app.post('/api/organizations', async (request, reply) => {
     const user = requireSuperAdmin(request);
     const input = createOrganizationInputSchema.parse(request.body);

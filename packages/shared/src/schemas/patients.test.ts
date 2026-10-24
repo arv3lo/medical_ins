@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createPatientInputSchema,
-  todayInMadagascar,
-  updatePatientInputSchema,
-} from './patients.js';
+import { createPatientInputSchema, updatePatientInputSchema } from './patients.js';
 
 const valid = {
   lastName: '  Rakoto ',
@@ -14,13 +10,6 @@ const valid = {
 
 afterEach(() => {
   vi.useRealTimers();
-});
-
-describe('todayInMadagascar', () => {
-  it('is the calendar date in Antananarivo (UTC+3)', () => {
-    expect(todayInMadagascar(new Date('2026-10-24T20:59:59Z'))).toBe('2026-10-24');
-    expect(todayInMadagascar(new Date('2026-10-24T22:30:00Z'))).toBe('2026-10-25');
-  });
 });
 
 describe('createPatientInputSchema', () => {

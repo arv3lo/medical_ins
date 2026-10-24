@@ -1,10 +1,11 @@
 import type { CreatePatientInput, PatientSummary, UpdatePatientInput } from '@medical-ins/shared';
-import { and, asc, eq, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, exists, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
-import { organizations, patientCenterLinks, patients } from '../../db/schema.js';
+import { affiliations, organizations, patientCenterLinks, patients } from '../../db/schema.js';
+import { HttpError, notFound } from '../../lib/errors.js';
+import { escapeLike } from '../../lib/sql.js';
 
 type Patient = typeof patients.$inferSelect;
-import { HttpError, notFound } from '../../lib/errors.js';
 
 const SEARCH_LIMIT = 50;
 
@@ -89,20 +90,9 @@ async function findDuplicates(
 }
 
 export function searchPatients(db: Db, organizationId: string, query = '') {
-  const digits = query.replace(/\D/g, '');
   const conditions: SQL[] = [eq(patientCenterLinks.organizationId, organizationId)];
-  if (query && digits.length === query.replace(/\s/g, '').length) {
-    // Only digits: a CIN prefix or part of a phone number, whatever its spacing.
-    const byDigits = or(
-      ilike(patients.nationalId, `${digits}%`),
-      sql`regexp_replace(${patients.phone}, '\\D', '', 'g') LIKE ${`%${digits}%`}`,
-    );
-    if (byDigits) conditions.push(byDigits);
-  } else if (query) {
-    conditions.push(
-      ilike(sql`${patients.lastName} || ' ' || ${patients.firstNames}`, `%${escapeLike(query)}%`),
-    );
-  }
+  const match = query ? matchPatient(db, query) : undefined;
+  if (match) conditions.push(match);
   return db
     .select({ patient: patients })
     .from(patients)
@@ -113,7 +103,32 @@ export function searchPatients(db: Db, organizationId: string, query = '') {
     .then((rows) => rows.map((r) => r.patient));
 }
 
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
+/** Name, CIN prefix, phone digits whatever their spacing, or member number prefix. */
+function matchPatient(db: Db, query: string) {
+  const digits = query.replace(/\D/g, '');
+  const byMemberNumber = exists(
+    db
+      .select({ one: sql`1` })
+      .from(affiliations)
+      .where(
+        and(
+          eq(affiliations.patientId, patients.id),
+          ilike(affiliations.memberNumber, `${escapeLike(query)}%`),
+        ),
+      ),
+  );
+  if (digits.length > 0 && digits.length === query.replace(/\s/g, '').length) {
+    return or(
+      ilike(patients.nationalId, `${digits}%`),
+      sql`regexp_replace(${patients.phone}, '\\D', '', 'g') LIKE ${`%${digits}%`}`,
+      byMemberNumber,
+    );
+  }
+  return or(
+    ilike(sql`${patients.lastName} || ' ' || ${patients.firstNames}`, `%${escapeLike(query)}%`),
+    byMemberNumber,
+  );
+}
 
 export async function insertPatient(tx: Tx, organizationId: string, input: CreatePatientInput) {
   await requireNoDuplicate(tx, input);
