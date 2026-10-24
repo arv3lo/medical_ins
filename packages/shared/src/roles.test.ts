@@ -43,4 +43,9 @@ describe('superAdminBypasses', () => {
     expect(superAdminBypasses('medical_record.write')).toBe(false);
     expect(superAdminBypasses('prescription.dispense')).toBe(false);
   });
+
+  it('keeps coverage requests, which carry the diagnosis, to the roles that handle them', () => {
+    expect(superAdminBypasses('coverage_request.create')).toBe(false);
+    expect(superAdminBypasses('coverage_request.decide')).toBe(false);
+  });
 });
