@@ -93,21 +93,21 @@ d'arrivée, acteur) et compare à la table de `data-model.md`.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [X] T010 [US1] Test exhaustif dans `packages/shared/src/schemas/coverage-requests.test.ts` :
+- [x] T010 [US1] Test exhaustif dans `packages/shared/src/schemas/coverage-requests.test.ts` :
   - pour chaque `from` de `COVERAGE_REQUEST_STATUSES`, chaque `to` et chaque acteur (`center`, `insurer`, `system`), `canTransition(from, to, actor)` vaut `true` exactement pour les 13 lignes de la table « Machine à états » de `data-model.md` ;
   - un statut de `FINAL_STATUSES` n'a aucune transition sortante ;
   - aucun `to` n'est `draft`.
 
 ### Implémentation
 
-- [X] T011 [US1] Implémenter `TRANSITIONS` (de → vers → acteur) et `canTransition` dans `packages/shared/src/schemas/coverage-requests.ts`. Commentaire court : la table est la seule source de la règle, le serveur la fait respecter et l'interface s'en sert pour n'afficher que les actions possibles.
-- [X] T012 [US1] Test puis implémentation de `transitionInputSchema` (zod) dans `packages/shared/src/schemas/coverage-requests.ts` :
+- [x] T011 [US1] Implémenter `TRANSITIONS` (de → vers → acteur) et `canTransition` dans `packages/shared/src/schemas/coverage-requests.ts`. Commentaire court : la table est la seule source de la règle, le serveur la fait respecter et l'interface s'en sert pour n'afficher que les actions possibles.
+- [x] T012 [US1] Test puis implémentation de `transitionInputSchema` (zod) dans `packages/shared/src/schemas/coverage-requests.ts` :
   - `{ to, reason?, grantedAmount?, validUntil? }` ;
   - `reason` : chaîne « non vide après trim, au plus 1 000 caractères » ;
   - `grantedAmount` : entier > 0 ;
   - `validUntil` : `isoDateSchema` ;
   - `to` ne peut pas être `draft`.
-- [X] T013 [US1] Test puis implémentation de `transitionProblem(from, to, input, context)` dans `packages/shared/src/schemas/coverage-requests.ts`. Elle renvoie un message français ou `null` :
+- [x] T013 [US1] Test puis implémentation de `transitionProblem(from, to, input, context)` dans `packages/shared/src/schemas/coverage-requests.ts`. Elle renvoie un message français ou `null` :
   - motif obligatoire pour `cancelled` depuis `submitted`, `under_review` ou `info_requested`, ainsi que pour `rejected` et `info_requested` ;
   - pour `granted` : `0 < grantedAmount ≤ estimatedAmount`, `validUntil ≥ today()`, motif obligatoire si `grantedAmount < estimatedAmount` ;
   - pour `used` : `today() ≤ validUntil`.
@@ -128,30 +128,30 @@ le montant estimé et l'historique par le GET.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [ ] T014 [P] [US2] Test partagé de `createCoverageRequestInputSchema` et `updateCoverageRequestInputSchema` dans `packages/shared/src/schemas/coverage-requests.test.ts` :
+- [x] T014 [P] [US2] Test partagé de `createCoverageRequestInputSchema` et `updateCoverageRequestInputSchema` dans `packages/shared/src/schemas/coverage-requests.test.ts` :
   - `items` de 1 à 30 lignes, `quantity` entier ≥ 1, `unitPrice` entier > 0 facultatif ;
   - `diagnosisCode` au format CIM-10 (réutiliser le schéma de code de `consultations.ts`) ;
   - la mise à jour exige au moins un champ.
-- [ ] T015 [P] [US2] Test partagé de `submissionProblem(affiliation, request, today)` dans `packages/shared/src/schemas/coverage-requests.test.ts` :
+- [x] T015 [P] [US2] Test partagé de `submissionProblem(affiliation, request, today)` dans `packages/shared/src/schemas/coverage-requests.test.ts` :
   - refuse une affiliation non active à cette date (réutiliser `isAffiliationActive`) ;
   - refuse une demande sans diagnostic ou sans ligne.
-- [ ] T016 [US2] Tests d'intégration dans `apps/api/test/coverage-requests.test.ts` :
+- [x] T016 [US2] Tests d'intégration dans `apps/api/test/coverage-requests.test.ts` :
   - **création** : 201 `{ id }` ; `insurerId` tiré de l'affiliation ; `estimatedAmount` recalculé (2 × 15 000 + 1 × 40 000 = 70 000, même si le client envoie autre chose) ; `unitPrice` absent = tarif de référence ; ligne copiant code, libellé et tarif ; événement `null → draft` ; audit `coverage_request.create` ;
   - **refus de création** :
     - 404 pour un patient non rattaché, une affiliation d'un autre patient, un acte ou un code inconnu ;
     - 403 pour l'accueil, le médecin conseil ou le super admin seul ;
-    - 404 si `:orgId` n'est pas un centre ;
+    - 404 si `:orgId` n'est pas un centre ; _inatteignable : un médecin ne peut pas être membre d'un assureur, l'appel s'arrête au 403 de la permission ; `requireHealthCenter` reste en défense._
   - **modification** : PATCH en `draft` ; `items` remplace les lignes et recalcule le montant ; audit `{ fields }` ; 409 hors `draft`/`info_requested` ; un autre médecin du même centre modifie et soumet le brouillon d'un collègue (200, FR-009) ;
   - **soumission** (`POST …/transitions`, `{ to: 'submitted' }`) : 200 avec une affiliation validée et active ; 400 avec un message français pour une affiliation `pending`, `rejected`, `withdrawn` ou hors de ses dates.
 
 ### Implémentation
 
-- [ ] T017 [US2] Implémenter les schémas (T014) et `submissionProblem` (T015) dans `packages/shared/src/schemas/coverage-requests.ts`.
-- [ ] T018 [US2] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
+- [x] T017 [US2] Implémenter les schémas (T014) et `submissionProblem` (T015) dans `packages/shared/src/schemas/coverage-requests.ts`.
+- [x] T018 [US2] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
   - `lockCoverageRequest(tx, id)`, qui lit avec `.for('update')` (patron de `requireOwnDraft`) ;
   - `insertCoverageRequest(tx, center, actor, input)`, qui vérifie le patient avec `requireLinkedPatient`, puis l'affiliation, les actes et le code, calcule les lignes et le montant, insère la demande et ses lignes, puis l'événement ;
   - `replaceItems` et `updateDraft` (verrou, statut `draft` ou `info_requested` sinon 409, recalcul).
-- [ ] T019 [US2] Dans `apps/api/src/modules/coverage-requests/transitions.ts`, implémenter `applyTransition(tx, { id, orgId, actor, actorUserId, input, ip })`, dans cet ordre :
+- [x] T019 [US2] Dans `apps/api/src/modules/coverage-requests/transitions.ts`, implémenter `applyTransition(tx, { id, orgId, actor, actorUserId, input, ip })`, dans cet ordre :
   1. verrou ;
   2. contrôle d'organisation (centre : `center_id = orgId` ; assureur : `insurer_id = orgId` et statut différent de `draft`, sinon 404) ;
   3. `canTransition`, sinon 409 ;
@@ -159,14 +159,14 @@ le montant estimé et l'historique par le GET.
   5. mise à jour ;
   6. insertion de l'événement ;
   7. `audit(tx, { action: 'coverage_request.<to>', after: { from, to } })`, sans le motif.
-- [ ] T020 [US2] Dans `apps/api/src/modules/coverage-requests/routes.ts`, écrire des routes minces :
+- [x] T020 [US2] Dans `apps/api/src/modules/coverage-requests/routes.ts`, écrire des routes minces :
   - `POST /api/organizations/:orgId/coverage-requests` (`coverage_request.create`, `requireHealthCenter`) ;
   - `PATCH …/:id` ;
   - `POST …/:id/transitions`, qui déduit l'acteur de la permission détenue dans `:orgId` (`center` ou `insurer` ; jamais `system`, sinon 403).
 
   Toutes les écritures répondent avec les ids seulement.
 
-- [ ] T021 [P] [US2] Ajouter `GET /api/referentials/medical-acts?q=` dans `apps/api/src/modules/coverage-requests/routes.ts` et `service.ts` : `requireUser`, au plus 50 résultats, recherche sur le code ou le libellé insensible à la casse avec `escapeLike` (`apps/api/src/lib/sql.ts`). Le test (code ou libellé, échappement de `%`, 401 anonyme) va dans `apps/api/test/coverage-requests.test.ts`.
+- [x] T021 [P] [US2] Ajouter `GET /api/referentials/medical-acts?q=` dans `apps/api/src/modules/coverage-requests/routes.ts` et `service.ts` : `requireUser`, au plus 50 résultats, recherche sur le code ou le libellé insensible à la casse avec `escapeLike` (`apps/api/src/lib/sql.ts`). Le test (code ou libellé, échappement de `%`, 401 anonyme) va dans `apps/api/test/coverage-requests.test.ts`.
 
 **Point de contrôle** : un médecin crée, modifie et soumet une demande par l'API, et T016 est vert.
 
