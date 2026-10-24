@@ -182,7 +182,7 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [X] T022 [US3] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [x] T022 [US3] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
   - `under_review` par le médecin conseil de l'assureur destinataire ;
   - l'accord total de 70 000 sur 70 000 donne `patientShare` 0 ;
   - l'accord partiel de 50 000 avec motif donne `patientShare` 20 000 ;
@@ -192,7 +192,7 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
   - le médecin conseil d'un autre assureur reçoit 404 ;
   - le médecin conseil sur un brouillon reçoit 404 ;
   - une affiliation retirée, ou dont `endsOn` est passé, après la soumission : la décision reste possible (200), et le GET assureur montre le statut actuel de l'affiliation.
-- [X] T023 [P] [US3] Tests de lecture dans `apps/api/test/coverage-requests.test.ts` :
+- [x] T023 [P] [US3] Tests de lecture dans `apps/api/test/coverage-requests.test.ts` :
   - `GET …/:id` côté centre : forme complète du contrat ;
   - côté assureur : forme assureur avec `center: { id, name }` ; les clés de premier niveau sont exactement celles du contrat ; aucune donnée de consultation ni d'autre demande ;
   - brouillon côté assureur : 404 ;
@@ -204,11 +204,11 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
 
 ### Implémentation
 
-- [X] T024 [US3] Étendre `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` pour `granted` : poser `granted_amount`, `patient_share = estimated − granted` et `valid_until`, et ajouter `{ grantedAmount, validUntil }` au payload d'audit.
-- [X] T025 [US3] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
+- [x] T024 [US3] Étendre `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` pour `granted` : poser `granted_amount`, `patient_share = estimated − granted` et `valid_until`, et ajouter `{ grantedAmount, validUntil }` au payload d'audit.
+- [x] T025 [US3] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
   - `findCoverageRequestForCenter` et `findCoverageRequestForInsurer` : sélections explicites selon le contrat, avec diagnostic (code et libellé), lignes triées par `position` et événements triés par `created_at` ;
   - `listCoverageRequests(tx, { orgId, side, status?, patientId?, offset })`.
-- [X] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `medical_record.read` (`entityType: 'coverage_request'`) est écrit dans la même transaction que la lecture.
+- [x] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `medical_record.read` (`entityType: 'coverage_request'`) est écrit dans la même transaction que la lecture.
 
 **Point de contrôle** : le cycle soumission → examen → décision passe par l'API, et les tests
 T022 et T023 sont verts.
@@ -225,18 +225,18 @@ réussit écrit le statut, l'événement et l'audit ensemble.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [X] T027 [P] [US5] Atomicité dans `apps/api/test/coverage-request-transitions.test.ts` : avec `withAuditFailing` (`apps/api/test/helpers.ts`), une transition répond 500, et le statut et les événements restent inchangés.
-- [X] T028 [P] [US5] Aucun texte médical dans l'audit (SC-002), dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [x] T027 [P] [US5] Atomicité dans `apps/api/test/coverage-request-transitions.test.ts` : avec `withAuditFailing` (`apps/api/test/helpers.ts`), une transition répond 500, et le statut et les événements restent inchangés.
+- [x] T028 [P] [US5] Aucun texte médical dans l'audit (SC-002), dans `apps/api/test/coverage-request-transitions.test.ts` :
   - un parcours complet (création, modification, soumission, examen, complément, nouvelle soumission, examen, accord partiel, utilisation) avec un motif, un libellé d'acte et un diagnostic repérables ;
   - ni le motif, ni le libellé, ni le code ou le libellé du diagnostic n'apparaissent dans le JSON d'une ligne de `audit_logs`.
-- [X] T029 [P] [US5] Course déterministe (SC-003), dans `apps/api/test/coverage-request-transitions.test.ts` : le test tient la ligne avec `SELECT … FOR UPDATE` dans sa propre transaction, envoie deux décisions (`granted` et `rejected`), attend qu'elles soient bloquées (`pg_stat_activity`), puis relâche. Résultat attendu : `[200, 409]`, et un seul événement de décision. Réutiliser l'approche du test de course de P2.4 (`whileSigning`).
-- [X] T030 [P] [US5] Historique en ajout seul, dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [x] T029 [P] [US5] Course déterministe (SC-003), dans `apps/api/test/coverage-request-transitions.test.ts` : le test tient la ligne avec `SELECT … FOR UPDATE` dans sa propre transaction, envoie deux décisions (`granted` et `rejected`), attend qu'elles soient bloquées (`pg_stat_activity`), puis relâche. Résultat attendu : `[200, 409]`, et un seul événement de décision. Réutiliser l'approche du test de course de P2.4 (`whileSigning`).
+- [x] T030 [P] [US5] Historique en ajout seul, dans `apps/api/test/coverage-request-transitions.test.ts` :
   - UPDATE et DELETE directs sur `coverage_request_events` échouent avec le message du trigger ;
   - après chaque scénario du fichier, le `to_status` du dernier événement égale le `status` de la demande (SC-004).
 
 ### Implémentation
 
-- [X] T031 [US5] Corriger, dans `apps/api/src/modules/coverage-requests/transitions.ts` et `service.ts`, tout ce que T027 à T030 font échouer. En principe rien, si T018 et T019 ont suivi le plan : dans ce cas, ces tests ne font que couvrir, et le message de commit le dit. Vérifier leur pouvoir de détection en cassant volontairement l'ordre verrou → contrôle, puis en rétablissant.
+- [x] T031 [US5] Corriger, dans `apps/api/src/modules/coverage-requests/transitions.ts` et `service.ts`, tout ce que T027 à T030 font échouer. En principe rien, si T018 et T019 ont suivi le plan : dans ce cas, ces tests ne font que couvrir, et le message de commit le dit. Vérifier leur pouvoir de détection en cassant volontairement l'ordre verrou → contrôle, puis en rétablissant.
 
 **Point de contrôle** : SC-002, SC-003 et SC-004 sont prouvés.
 
@@ -251,7 +251,7 @@ annulation, avec l'historique.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [ ] T032 [US4] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [x] T032 [US4] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
   - en `info_requested`, PATCH des lignes puis `submitted` : deux événements de soumission dans l'historique ;
   - `cancelled` depuis `draft` (sans motif), et depuis `submitted`, `under_review` ou `info_requested` (motif obligatoire) ;
   - toute transition depuis `cancelled` répond 409 ;
@@ -261,7 +261,7 @@ annulation, avec l'historique.
 
 ### Implémentation
 
-- [ ] T033 [US4] Compléter `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` et `transitionProblem` dans `packages/shared/src/schemas/coverage-requests.ts` pour faire passer T032, sans nouvelle route.
+- [x] T033 [US4] Compléter `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` et `transitionProblem` dans `packages/shared/src/schemas/coverage-requests.ts` pour faire passer T032, sans nouvelle route. _Rien à ajouter : T032 passait d'emblée, la règle partagée (US1, testée d'abord) et la route générique couvrant déjà ces transitions._
 
 **Point de contrôle** : tout le tableau FR-004 est couvert par l'API, sauf les transitions
 `system`, couvertes par le test partagé.
