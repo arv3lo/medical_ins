@@ -1,6 +1,7 @@
 import {
   SEX_LABELS,
   SEXES,
+  todayInMadagascar,
   type CreatePatientInput,
   type Patient,
   type Sex,
@@ -78,7 +79,7 @@ export function PatientForm({ initial, submitLabel, pending, onSubmit }: Props) 
           id="birthDate"
           type="date"
           value={birthDate}
-          max={new Date().toISOString().slice(0, 10)}
+          max={todayInMadagascar()}
           onChange={(e) => setBirthDate(e.target.value)}
           required
         />

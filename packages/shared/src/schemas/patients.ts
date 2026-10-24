@@ -17,6 +17,12 @@ const isCalendarDate = (value: string) => {
   return year >= MIN_YEAR && date.toISOString().slice(0, 10) === value;
 };
 
+// en-CA formats dates as YYYY-MM-DD.
+const madagascarDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Antananarivo' });
+
+/** Today's date (YYYY-MM-DD) in Madagascar, whatever the time zone of the server or browser. */
+export const todayInMadagascar = (now = new Date()) => madagascarDate.format(now);
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format AAAA-MM-JJ')
@@ -29,7 +35,7 @@ const patientFields = {
   lastName: z.string().trim().min(1).max(100),
   firstNames: z.string().trim().min(1).max(200),
   birthDate: isoDate.refine(
-    (value) => value <= new Date().toISOString().slice(0, 10),
+    (value) => value <= todayInMadagascar(),
     'La date de naissance ne peut pas être dans le futur',
   ),
   sex: z.enum(SEXES),

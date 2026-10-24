@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { createPatientInputSchema, updatePatientInputSchema } from './patients.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createPatientInputSchema,
+  todayInMadagascar,
+  updatePatientInputSchema,
+} from './patients.js';
 
 const valid = {
   lastName: '  Rakoto ',
@@ -7,6 +11,17 @@ const valid = {
   birthDate: '1985-03-12',
   sex: 'male',
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('todayInMadagascar', () => {
+  it('is the calendar date in Antananarivo (UTC+3)', () => {
+    expect(todayInMadagascar(new Date('2026-10-24T20:59:59Z'))).toBe('2026-10-24');
+    expect(todayInMadagascar(new Date('2026-10-24T22:30:00Z'))).toBe('2026-10-25');
+  });
+});
 
 describe('createPatientInputSchema', () => {
   it('accepts a minimal patient and trims names', () => {
@@ -30,6 +45,16 @@ describe('createPatientInputSchema', () => {
     expect(accepts('2023-02-30')).toBe(false);
     expect(accepts('2023-13-01')).toBe(false);
     expect(accepts('1899-12-31')).toBe(false);
+  });
+
+  it('accepts a baby born today in Madagascar while it is still yesterday in UTC', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-24T22:30:00Z') });
+    expect(createPatientInputSchema.safeParse({ ...valid, birthDate: '2026-10-25' }).success).toBe(
+      true,
+    );
+    expect(createPatientInputSchema.safeParse({ ...valid, birthDate: '2026-10-26' }).success).toBe(
+      false,
+    );
   });
 
   it('only accepts a 12-digit CIN', () => {
