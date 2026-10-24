@@ -63,6 +63,37 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     return consultation;
   }
 
+  /**
+   * Sends `request` while another transaction signs consultation `id`, and commits that signature
+   * once the request either finished or waits on a lock: the interleaving of two concurrent calls,
+   * made deterministic.
+   */
+  async function whileSigning(id: string, request: () => ReturnType<typeof inject>) {
+    let pending!: ReturnType<typeof inject>;
+    await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(consultations)
+        .set({ signedAt: sql`now()` })
+        .where(eq(consultations.id, id));
+      let settled = false;
+      pending = request().finally(() => {
+        settled = true;
+      });
+      while (!settled && !(await waitingOnLock())) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    });
+    return pending;
+  }
+
+  async function waitingOnLock() {
+    const rows = await ctx.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    return rows[0]!.n > 0;
+  }
+
   const actions = async (action: string) =>
     ctx.db.select().from(auditLogs).where(eq(auditLogs.action, action));
 
@@ -177,6 +208,27 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect((await inject('POST', `${base()}/${consultation.id}/sign`, doctor)).statusCode).toBe(
       409,
     );
+  });
+
+  it('refuses a draft edit that races a signature, keeping the signed diagnoses', async () => {
+    const consultation = await draft();
+    const url = `${base()}/${consultation.id}`;
+    await inject('PATCH', url, doctor, { diagnoses: [{ code: 'B54', primary: true }] });
+    const edit = await whileSigning(consultation.id, () =>
+      inject('PATCH', url, doctor, { diagnoses: [{ code: 'J06.9', primary: false }] }),
+    );
+    expect(edit.statusCode).toBe(409);
+    const read = await inject('GET', url, doctor);
+    expect(read.json<Consultation>().diagnoses).toMatchObject([{ code: 'B54', primary: true }]);
+  });
+
+  it('answers 409, not 500, to a signature that races another one', async () => {
+    const consultation = await draft();
+    const url = `${base()}/${consultation.id}`;
+    await inject('PATCH', url, doctor, { diagnoses: [{ code: 'B54', primary: true }] });
+    const sign = await whileSigning(consultation.id, () => inject('POST', `${url}/sign`, doctor));
+    expect(sign.statusCode).toBe(409);
+    expect(sign.json()).toMatchObject({ message: 'Consultation signée : ajoutez un avenant' });
   });
 
   it('enforces read-only signed consultations in the database too', async () => {
