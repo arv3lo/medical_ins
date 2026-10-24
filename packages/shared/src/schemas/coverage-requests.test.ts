@@ -5,6 +5,7 @@ import {
   type CoverageRequestStatus,
   FINAL_STATUSES,
   canTransition,
+  transitionInputSchema,
 } from './coverage-requests.js';
 
 const ACTORS: CoverageRequestActor[] = ['center', 'insurer', 'system'];
@@ -51,5 +52,32 @@ describe('canTransition', () => {
         }
       }
     }
+  });
+});
+
+describe('transitionInputSchema', () => {
+  const ok = (input: unknown) => transitionInputSchema.safeParse(input).success;
+
+  it('accepts a target status with an optional reason, amount and date', () => {
+    expect(ok({ to: 'submitted' })).toBe(true);
+    expect(
+      ok({ to: 'granted', reason: 'Partiel', grantedAmount: 50000, validUntil: '2026-11-30' }),
+    ).toBe(true);
+  });
+
+  it('trims the reason and refuses an empty or too long one', () => {
+    expect(transitionInputSchema.parse({ to: 'rejected', reason: '  Hors contrat ' }).reason).toBe(
+      'Hors contrat',
+    );
+    expect(ok({ to: 'rejected', reason: '   ' })).toBe(false);
+    expect(ok({ to: 'rejected', reason: 'x'.repeat(1001) })).toBe(false);
+  });
+
+  it('refuses a non-positive or non-integer amount, a bad date, an unknown or draft status', () => {
+    expect(ok({ to: 'granted', grantedAmount: 0 })).toBe(false);
+    expect(ok({ to: 'granted', grantedAmount: 1000.5 })).toBe(false);
+    expect(ok({ to: 'granted', validUntil: '2026-02-30' })).toBe(false);
+    expect(ok({ to: 'approved' })).toBe(false);
+    expect(ok({ to: 'draft' })).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isoDateSchema } from './dates.js';
 
 /** Life cycle of a coverage request (prior approval), roadmap P3. */
 export const COVERAGE_REQUEST_STATUSES = [
@@ -76,3 +77,22 @@ export function canTransition(
 ): boolean {
   return TRANSITIONS[from][to] === actor;
 }
+
+/** A reason, required by some transitions (FR-004); kept in the history, never in the audit. */
+export const reasonSchema = z
+  .string()
+  .trim()
+  .min(1, 'Motif requis')
+  .max(1000, 'Motif trop long (1 000 caractères au plus)');
+
+/** Ariary are whole: no amount has decimals. */
+const amountSchema = z.number().int('Montant en ariary entiers').positive('Montant invalide');
+
+/** Moving a request; which fields a move requires is checked by `transitionProblem`. */
+export const transitionInputSchema = z.object({
+  to: coverageRequestStatusSchema.exclude(['draft']),
+  reason: reasonSchema.optional(),
+  grantedAmount: amountSchema.optional(),
+  validUntil: isoDateSchema.optional(),
+});
+export type TransitionInput = z.infer<typeof transitionInputSchema>;
