@@ -5,6 +5,7 @@ import {
   signingProblem,
   updateConsultationInputSchema,
 } from '@medical-ins/shared';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Db } from '../../db/client.js';
@@ -29,6 +30,10 @@ const consultationParams = orgParams.extend({ consultationId: z.string().uuid() 
 
 const BASE = '/api/organizations/:orgId/consultations';
 const ONE_PER_APPOINTMENT = 'consultations_appointment_id_unique';
+
+/** The client opens the existing consultation instead, when it knows which one. */
+const alreadyConsulted = (consultationId?: string) =>
+  new HttpError(409, 'Une consultation existe déjà pour ce rendez-vous', { consultationId });
 
 export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): void {
   app.get('/api/referentials/icd10', async (request) => {
@@ -90,6 +95,10 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       if (appointment.status !== 'scheduled' && appointment.status !== 'arrived') {
         throw new HttpError(409, 'Ce rendez-vous est clos');
       }
+      const existing = await db.query.consultations.findFirst({
+        where: eq(consultations.appointmentId, input.appointmentId),
+      });
+      if (existing) throw alreadyConsulted(existing.id);
     }
 
     try {
@@ -112,9 +121,7 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       return reply.status(201).send(await findConsultation(db, id, actor.id));
     } catch (error) {
       const cause = (error as { cause?: { constraint_name?: string } }).cause;
-      if (cause?.constraint_name === ONE_PER_APPOINTMENT) {
-        throw new HttpError(409, 'Une consultation existe déjà pour ce rendez-vous');
-      }
+      if (cause?.constraint_name === ONE_PER_APPOINTMENT) throw alreadyConsulted();
       throw error;
     }
   });

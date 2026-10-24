@@ -283,7 +283,9 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
 
     it('opens one consultation per appointment and completes the visit on signing', async () => {
       const consultation = (await start(doctor, { appointmentId })).json<Consultation>();
-      expect((await start(doctor, { appointmentId })).statusCode).toBe(409);
+      const again = await start(doctor, { appointmentId });
+      expect(again.statusCode).toBe(409);
+      expect(again.json()).toMatchObject({ consultationId: consultation.id });
 
       await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
         diagnoses: [{ code: 'B54', primary: true }],
