@@ -143,8 +143,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     `GET /api/organizations/:orgId/patients?q=` (nom, CIN, téléphone),
     `GET/PATCH /api/organizations/:orgId/patients/:id` ; écrans liste/recherche et fiche.
   - Règles : le patient est partagé entre centres (dossier unique) ; un centre le voit dès qu'il
-    a créé le patient, pris un rendez-vous ou fait une consultation pour lui (table
-    `patient_center_links`). Détection de doublon probable (même nom + même date de naissance)
+    a créé le patient, pris un rendez-vous ou fait une consultation pour lui, ou l'a rattaché
+    après un avertissement de doublon (table `patient_center_links`, rattachement audité). Détection de doublon probable (même nom + même date de naissance)
     avant création.
   - Acceptation : `reception` crée (`patient.create`) et modifie (nouvelle permission
     `patient.update`) l'administratif ; tout rôle ayant `patient.read_admin` le lit ; aucun
@@ -376,17 +376,22 @@ Reprises du cahier des charges ; chaque réponse va dans le journal des décisio
 - Le ticket modérateur est-il encaissé via la plateforme ? (Hypothèse : calculé et affiché
   seulement.)
 - Quel délai maximal de réponse de l'assureur pour une demande urgente ?
+- Source et licence des libellés CIM-10 FR (OMS / ATIH) avant d'importer la table complète
+  (P1.5) ; le jeu de départ de P2.4 en reprend une partie.
 - Obtenir un vrai bon de prise en charge et une vraie feuille de soins pour valider les
   formulaires.
 
 ## Journal des décisions
 
-| Date       | Décision                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-24 | Stack : TypeScript, Fastify, Drizzle, PostgreSQL 16, React + Vite, auto-hébergement docker-compose + Caddy.                                 |
-| 2026-10-24 | MinIO abandonné (images Docker plus publiées). Stockage des documents à choisir avant P2.6.                                                 |
-| 2026-10-24 | Seul le super admin crée les comptes ; les admins d'organisation rattachent des comptes existants (revue PR #1).                            |
-| 2026-10-24 | Les routes métier prennent l'organisation dans l'URL (`/api/organizations/:orgId/...`) pour que chaque contrôle d'accès soit explicite.     |
-| 2026-10-24 | Interface : shadcn/ui autant que possible (Tailwind, variables CSS de thème) ; charte couleurs à venir.                                     |
-| 2026-10-24 | Déploiement : une instance centrale unique (API + PostgreSQL avec réplique de secours) ; les centres et filiales y accèdent par navigateur. |
-| 2026-10-24 | Documents : interface `DocumentStorage` sur l'API S3, avec Garage auto-hébergé (plusieurs nœuds pour la redondance en production).          |
+| Date       | Décision                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-24 | Stack : TypeScript, Fastify, Drizzle, PostgreSQL 16, React + Vite, auto-hébergement docker-compose + Caddy.                                                          |
+| 2026-10-24 | MinIO abandonné (images Docker plus publiées). Stockage des documents à choisir avant P2.6.                                                                          |
+| 2026-10-24 | Seul le super admin crée les comptes ; les admins d'organisation rattachent des comptes existants (revue PR #1).                                                     |
+| 2026-10-24 | Les routes métier prennent l'organisation dans l'URL (`/api/organizations/:orgId/...`) pour que chaque contrôle d'accès soit explicite.                              |
+| 2026-10-24 | Interface : shadcn/ui autant que possible (Tailwind, variables CSS de thème) ; charte couleurs à venir.                                                              |
+| 2026-10-24 | Déploiement : une instance centrale unique (API + PostgreSQL avec réplique de secours) ; les centres et filiales y accèdent par navigateur.                          |
+| 2026-10-24 | Documents : interface `DocumentStorage` sur l'API S3, avec Garage auto-hébergé (plusieurs nœuds pour la redondance en production).                                   |
+| 2026-10-24 | Tout centre peut rattacher un patient existant (`POST …/patients/:id/link`, après un avertissement de doublon) : dossier unique, rattachement audité (revue PR #4).  |
+| 2026-10-24 | L'accueil voit le motif des rendez-vous (`appointment.read`), qu'il saisit lui-même : seule exception à « contenu médical réservé aux rôles de soin » (revue PR #6). |
+| 2026-10-24 | Animations : Animate.css choisi délibérément pour les entrées et effets d'attention ; `tw-animate-css` reste pour les états des composants shadcn (revue PR #9).     |
