@@ -1,8 +1,15 @@
-import { ORGANIZATION_TYPES, ROLES, SEXES } from '@medical-ins/shared';
+import {
+  AFFILIATION_STATUSES,
+  HOLDER_STATUSES,
+  ORGANIZATION_TYPES,
+  ROLES,
+  SEXES,
+} from '@medical-ins/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
+  check,
   date,
   index,
   jsonb,
@@ -19,6 +26,8 @@ import {
 export const organizationType = pgEnum('organization_type', ORGANIZATION_TYPES);
 export const role = pgEnum('role', ROLES);
 export const sex = pgEnum('sex', SEXES);
+export const holderStatus = pgEnum('holder_status', HOLDER_STATUSES);
+export const affiliationStatus = pgEnum('affiliation_status', AFFILIATION_STATUSES);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -116,6 +125,41 @@ export const patientCenterLinks = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.patientId, t.organizationId] }), index().on(t.organizationId)],
+);
+
+/** A patient's coverage by an insurer: declared by a center, validated by the insurer. */
+export const affiliations = pgTable(
+  'affiliations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    insurerId: uuid('insurer_id')
+      .notNull()
+      .references(() => organizations.id),
+    memberNumber: text('member_number').notNull(),
+    holderStatus: holderStatus('holder_status').notNull(),
+    planName: text('plan_name'),
+    employer: text('employer'),
+    startsOn: date('starts_on').notNull(),
+    endsOn: date('ends_on'),
+    status: affiliationStatus('status').notNull().default('pending'),
+    rejectionReason: text('rejection_reason'),
+    declaredByOrganizationId: uuid('declared_by_organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    ...timestamps,
+  },
+  (t) => [
+    // Dependents carry their holder's number, so only holders make a number unique.
+    uniqueIndex('affiliations_holder_member_number_unique')
+      .on(t.insurerId, t.memberNumber)
+      .where(sql`${t.holderStatus} = 'holder'`),
+    index().on(t.patientId),
+    index().on(t.insurerId, t.status),
+    check('affiliations_dates_check', sql`${t.endsOn} IS NULL OR ${t.endsOn} >= ${t.startsOn}`),
+  ],
 );
 
 /** Append-only: a database trigger rejects UPDATE and DELETE (see migrations). */
