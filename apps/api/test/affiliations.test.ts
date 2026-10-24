@@ -90,6 +90,13 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       decision === 'reject' ? { reason: 'Numéro inconnu' } : undefined,
     );
 
+  const withdraw = (cookie: string, affiliationId: string, orgId = center) =>
+    inject(
+      'POST',
+      `/api/organizations/${orgId}/patients/${patientId}/affiliations/${affiliationId}/withdraw`,
+      cookie,
+    );
+
   /** Waits until `count` other sessions are blocked on a lock held by the test. */
   const waitForLockWaiters = async (count: number) => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -183,6 +190,36 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
 
     expect((await declareHolder(patientId, { startsOn: '2026-01-01' })).statusCode).toBe(201);
     expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(409);
+  });
+
+  it('lets the declaring center withdraw a pending declaration, audited', async () => {
+    const affiliation = (await declareHolder(patientId)).json<{ id: string }>();
+
+    expect((await withdraw(await as('doctor', center), affiliation.id)).statusCode).toBe(403);
+    const otherReception = await as('reception', otherCenter);
+    expect((await withdraw(otherReception, affiliation.id, otherCenter)).statusCode).toBe(404);
+
+    const withdrawn = await withdraw(reception, affiliation.id);
+    expect(withdrawn.statusCode).toBe(200);
+    expect(withdrawn.json()).toMatchObject({ status: 'withdrawn' });
+    // Withdrawn is final, and the insurer can no longer decide it.
+    expect((await withdraw(reception, affiliation.id)).statusCode).toBe(409);
+    expect((await decideAs(affiliation.id, 'validate')).statusCode).toBe(409);
+
+    // The number is free again.
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(201);
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'affiliation.withdraw'));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ organizationId: center, entityId: affiliation.id });
+  });
+
+  it('cannot withdraw a declaration the insurer has decided', async () => {
+    const affiliation = (await declareHolder(patientId)).json<{ id: string }>();
+    await decideAs(affiliation.id, 'validate');
+    expect((await withdraw(reception, affiliation.id)).statusCode).toBe(409);
   });
 
   it('shows each insurer only its own affiliations, with identity but nothing medical', async () => {

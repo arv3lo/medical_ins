@@ -15,11 +15,13 @@ import {
   listInsurerAffiliations,
   listPatientAffiliations,
   requireInsurer,
+  withdrawAffiliation,
 } from './service.js';
 
 const patientParams = z.object({ orgId: z.string().uuid(), patientId: z.string().uuid() });
 const insurerParams = z.object({ orgId: z.string().uuid() });
 const affiliationParams = insurerParams.extend({ affiliationId: z.string().uuid() });
+const patientAffiliationParams = patientParams.extend({ affiliationId: z.string().uuid() });
 const insurerQuery = z.object({ status: z.enum(AFFILIATION_STATUSES).optional() });
 
 const PATIENT_AFFILIATIONS = '/api/organizations/:orgId/patients/:patientId/affiliations';
@@ -61,6 +63,26 @@ export function affiliationRoutes(app: FastifyInstance, { db }: { db: Db }): voi
       (a) => a.id === created.id,
     );
     return reply.status(201).send(withName);
+  });
+
+  app.post(`${PATIENT_AFFILIATIONS}/:affiliationId/withdraw`, async (request) => {
+    const { orgId, patientId, affiliationId } = patientAffiliationParams.parse(request.params);
+    const actor = requirePermission(request, orgId, 'patient.update');
+    await requireLinkedPatient(db, orgId, patientId);
+    return db.transaction(async (tx) => {
+      const { before, after } = await withdrawAffiliation(tx, orgId, patientId, affiliationId);
+      await audit(tx, {
+        actorUserId: actor.id,
+        organizationId: orgId,
+        action: 'affiliation.withdraw',
+        entityType: 'affiliation',
+        entityId: affiliationId,
+        before,
+        after,
+        ip: request.ip,
+      });
+      return after;
+    });
   });
 
   app.get(INSURER_AFFILIATIONS, async (request) => {

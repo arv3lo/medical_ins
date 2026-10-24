@@ -1,5 +1,5 @@
 import type { AffiliationStatus, CreateAffiliationInput } from '@medical-ins/shared';
-import { and, desc, eq, getTableColumns } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { affiliations, organizations, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
@@ -66,25 +66,56 @@ export async function insertAffiliation(
   return created;
 }
 
-/** Validation and rejection are final: only a pending affiliation can be decided. */
-export async function decideAffiliation(
+/**
+ * Moves the pending affiliation that `scope` finds out of pending. Every other status is final.
+ * The update is conditional, so a concurrent change made since the read leaves nothing to update.
+ */
+async function leavePending(
+  tx: Tx,
+  scope: SQL | undefined,
+  values: { status: 'validated' | 'withdrawn' } | { status: 'rejected'; rejectionReason: string },
+) {
+  const before = await tx.query.affiliations.findFirst({ where: scope });
+  if (!before) throw notFound('Affiliation');
+  const alreadyDone = new HttpError(409, 'Cette affiliation a déjà été traitée');
+  if (before.status !== 'pending') throw alreadyDone;
+  const [after] = await tx
+    .update(affiliations)
+    .set(values)
+    .where(and(scope, eq(affiliations.status, 'pending')))
+    .returning();
+  if (!after) throw alreadyDone;
+  return { before, after };
+}
+
+/** The insurer validates or rejects an affiliation declared to it. */
+export function decideAffiliation(
   tx: Tx,
   insurerId: string,
   affiliationId: string,
   decision: { status: 'validated' } | { status: 'rejected'; rejectionReason: string },
 ) {
-  const before = await tx.query.affiliations.findFirst({
-    where: and(eq(affiliations.id, affiliationId), eq(affiliations.insurerId, insurerId)),
-  });
-  if (!before) throw notFound('Affiliation');
-  const alreadyDecided = new HttpError(409, 'Cette affiliation a déjà été traitée');
-  if (before.status !== 'pending') throw alreadyDecided;
-  // Conditional, so that a concurrent decision made since the read leaves nothing to update.
-  const [after] = await tx
-    .update(affiliations)
-    .set(decision)
-    .where(and(eq(affiliations.id, affiliationId), eq(affiliations.status, 'pending')))
-    .returning();
-  if (!after) throw alreadyDecided;
-  return { before, after };
+  return leavePending(
+    tx,
+    and(eq(affiliations.id, affiliationId), eq(affiliations.insurerId, insurerId)),
+    decision,
+  );
+}
+
+/** The declaring center takes back a declaration the insurer has not decided yet. */
+export function withdrawAffiliation(
+  tx: Tx,
+  centerId: string,
+  patientId: string,
+  affiliationId: string,
+) {
+  return leavePending(
+    tx,
+    and(
+      eq(affiliations.id, affiliationId),
+      eq(affiliations.patientId, patientId),
+      eq(affiliations.declaredByOrganizationId, centerId),
+    ),
+    { status: 'withdrawn' },
+  );
 }

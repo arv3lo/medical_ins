@@ -8,12 +8,14 @@ export const HOLDER_STATUS_LABELS: Record<HolderStatus, string> = {
   dependent: 'Ayant droit',
 };
 
-export const AFFILIATION_STATUSES = ['pending', 'validated', 'rejected'] as const;
+/** `withdrawn`: the declaring center took back a pending declaration made by mistake. */
+export const AFFILIATION_STATUSES = ['pending', 'validated', 'rejected', 'withdrawn'] as const;
 export type AffiliationStatus = (typeof AFFILIATION_STATUSES)[number];
 export const AFFILIATION_STATUS_LABELS: Record<AffiliationStatus, string> = {
   pending: 'À valider',
   validated: 'Validée',
   rejected: 'Refusée',
+  withdrawn: 'Retirée',
 };
 
 /** Declared by a center; stays pending until the insurer validates it. */

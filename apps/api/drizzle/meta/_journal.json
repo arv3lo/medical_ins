@@ -50,6 +50,13 @@
       "when": 1792865336323,
       "tag": "0006_affiliations_holder_exclusion",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792865451960,
+      "tag": "0007_affiliation_status_withdrawn",
+      "breakpoints": true
     }
   ]
 }
