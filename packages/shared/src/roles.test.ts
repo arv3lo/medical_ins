@@ -17,4 +17,12 @@ describe('roles', () => {
     expect(isRoleAllowedFor('doctor', 'insurer')).toBe(false);
     expect(isRoleAllowedFor('medical_advisor', 'insurer')).toBe(true);
   });
+
+  it('lets reception edit patient records, and keeps insurers away from them', () => {
+    expect(hasPermission(['reception'], 'patient.update')).toBe(true);
+    expect(hasPermission(['billing'], 'patient.update')).toBe(false);
+    for (const role of ['insurer_manager', 'medical_advisor', 'insurer_accountant'] as const) {
+      expect(hasPermission([role], 'patient.read_admin')).toBe(false);
+    }
+  });
 });

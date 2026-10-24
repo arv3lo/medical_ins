@@ -41,6 +41,7 @@ export function isRoleAllowedFor(role: Role, type: OrganizationType): boolean {
 export const PERMISSIONS = [
   'org.members.manage',
   'patient.create',
+  'patient.update',
   'patient.read_admin',
   'appointment.manage',
   'medical_record.read',
@@ -60,7 +61,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  */
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   center_admin: ['org.members.manage', 'patient.read_admin'],
-  reception: ['patient.create', 'patient.read_admin', 'appointment.manage'],
+  reception: ['patient.create', 'patient.update', 'patient.read_admin', 'appointment.manage'],
   doctor: [
     'patient.read_admin',
     'medical_record.read',
