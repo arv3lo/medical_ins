@@ -4,7 +4,7 @@ import {
   MAX_REQUEST_AMOUNT,
   type UpdateCoverageRequestInput,
 } from '@medical-ins/shared';
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from '../../db/client.js';
 import {
@@ -190,11 +190,11 @@ export async function updateCoverageRequest(
 }
 
 export async function countItems(db: Db | Tx, id: string): Promise<number> {
-  const rows = await db
-    .select({ id: coverageRequestItems.id })
+  const [row] = await db
+    .select({ n: count() })
     .from(coverageRequestItems)
     .where(eq(coverageRequestItems.coverageRequestId, id));
-  return rows.length;
+  return row!.n;
 }
 
 const center = alias(organizations, 'center');
