@@ -1,8 +1,13 @@
-import type { AffiliationStatus, CreateAffiliationInput } from '@medical-ins/shared';
-import { and, desc, eq, getTableColumns } from 'drizzle-orm';
+import {
+  INSURED_PAGE_SIZE,
+  type AffiliationStatus,
+  type CreateAffiliationInput,
+} from '@medical-ins/shared';
+import { and, asc, desc, eq, getTableColumns, ilike, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { affiliations, organizations, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
+import { escapeLike } from '../../lib/sql.js';
 
 export async function requireInsurer(db: Db | Tx, organizationId: string): Promise<void> {
   const organization = await db.query.organizations.findFirst({
@@ -22,39 +27,61 @@ export function listPatientAffiliations(db: Db, patientId: string) {
     .orderBy(desc(affiliations.startsOn));
 }
 
-/** The insurer's view: who is covered, never what they were treated for. */
-export async function listInsurerAffiliations(
+/**
+ * The insurer's view (InsuredAffiliation): only what a decision needs. Not which center
+ * declared it, which can hint at what the patient is treated for, nor internal ids.
+ */
+const insurerView = {
+  id: affiliations.id,
+  memberNumber: affiliations.memberNumber,
+  holderStatus: affiliations.holderStatus,
+  planName: affiliations.planName,
+  employer: affiliations.employer,
+  startsOn: affiliations.startsOn,
+  endsOn: affiliations.endsOn,
+  status: affiliations.status,
+  rejectionReason: affiliations.rejectionReason,
+  patient: {
+    lastName: patients.lastName,
+    firstNames: patients.firstNames,
+    birthDate: patients.birthDate,
+    nationalId: patients.nationalId,
+  },
+};
+
+/** One page of the insurer's list, oldest declaration first; `memberNumber` is a prefix. */
+export function listInsurerAffiliations(
   db: Db,
   insurerId: string,
-  status?: AffiliationStatus,
+  filters: { status?: AffiliationStatus; memberNumber?: string; offset: number },
 ) {
-  const rows = await db
-    .select({
-      affiliation: withInsurerName,
-      patient: {
-        lastName: patients.lastName,
-        firstNames: patients.firstNames,
-        birthDate: patients.birthDate,
-        nationalId: patients.nationalId,
-      },
-    })
-    .from(affiliations)
-    .innerJoin(organizations, eq(organizations.id, affiliations.insurerId))
-    .innerJoin(patients, eq(patients.id, affiliations.patientId))
-    .where(
-      and(
-        eq(affiliations.insurerId, insurerId),
-        status ? eq(affiliations.status, status) : undefined,
-      ),
-    )
-    .orderBy(affiliations.createdAt);
-  return rows.map(({ affiliation, patient }) => ({ ...affiliation, patient }));
+  const { status, memberNumber, offset } = filters;
+  return (
+    db
+      .select(insurerView)
+      .from(affiliations)
+      .innerJoin(patients, eq(patients.id, affiliations.patientId))
+      .where(
+        and(
+          eq(affiliations.insurerId, insurerId),
+          status ? eq(affiliations.status, status) : undefined,
+          memberNumber
+            ? ilike(affiliations.memberNumber, `${escapeLike(memberNumber)}%`)
+            : undefined,
+        ),
+      )
+      // The id breaks ties, so that a page boundary is stable.
+      .orderBy(asc(affiliations.createdAt), asc(affiliations.id))
+      .limit(INSURED_PAGE_SIZE)
+      .offset(offset)
+  );
 }
 
 export async function insertAffiliation(
   tx: Tx,
   values: CreateAffiliationInput & { patientId: string; declaredByOrganizationId: string },
 ) {
+  // DO NOTHING without a target also covers the holder number's exclusion constraint.
   const [created] = await tx.insert(affiliations).values(values).onConflictDoNothing().returning();
   if (!created) {
     throw new HttpError(
@@ -65,22 +92,56 @@ export async function insertAffiliation(
   return created;
 }
 
-/** Validation and rejection are final: only a pending affiliation can be decided. */
-export async function decideAffiliation(
+/**
+ * Moves the pending affiliation that `scope` finds out of pending. Every other status is final.
+ * The update is conditional, so a concurrent change made since the read leaves nothing to update.
+ */
+async function leavePending(
+  tx: Tx,
+  scope: SQL | undefined,
+  values: { status: 'validated' | 'withdrawn' } | { status: 'rejected'; rejectionReason: string },
+) {
+  const before = await tx.query.affiliations.findFirst({ where: scope });
+  if (!before) throw notFound('Affiliation');
+  const alreadyDone = new HttpError(409, 'Cette affiliation a déjà été traitée');
+  if (before.status !== 'pending') throw alreadyDone;
+  const [after] = await tx
+    .update(affiliations)
+    .set(values)
+    .where(and(scope, eq(affiliations.status, 'pending')))
+    .returning();
+  if (!after) throw alreadyDone;
+  return { before, after };
+}
+
+/** The insurer validates or rejects an affiliation declared to it. */
+export function decideAffiliation(
   tx: Tx,
   insurerId: string,
   affiliationId: string,
   decision: { status: 'validated' } | { status: 'rejected'; rejectionReason: string },
 ) {
-  const before = await tx.query.affiliations.findFirst({
-    where: and(eq(affiliations.id, affiliationId), eq(affiliations.insurerId, insurerId)),
-  });
-  if (!before) throw notFound('Affiliation');
-  if (before.status !== 'pending') throw new HttpError(409, 'Cette affiliation a déjà été traitée');
-  const [after] = await tx
-    .update(affiliations)
-    .set(decision)
-    .where(eq(affiliations.id, affiliationId))
-    .returning();
-  return { before, after: after! };
+  return leavePending(
+    tx,
+    and(eq(affiliations.id, affiliationId), eq(affiliations.insurerId, insurerId)),
+    decision,
+  );
+}
+
+/** The declaring center takes back a declaration the insurer has not decided yet. */
+export function withdrawAffiliation(
+  tx: Tx,
+  centerId: string,
+  patientId: string,
+  affiliationId: string,
+) {
+  return leavePending(
+    tx,
+    and(
+      eq(affiliations.id, affiliationId),
+      eq(affiliations.patientId, patientId),
+      eq(affiliations.declaredByOrganizationId, centerId),
+    ),
+    { status: 'withdrawn' },
+  );
 }

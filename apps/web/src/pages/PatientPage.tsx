@@ -17,7 +17,7 @@ import { PatientForm } from '@/components/patients/patient-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
-import { usePatientAffiliations } from '@/lib/affiliations';
+import { usePatientAffiliations, useWithdrawAffiliation } from '@/lib/affiliations';
 import { useAppointments } from '@/lib/appointments';
 import { addDays, daysRange, formatDate, localToday } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
@@ -106,6 +106,7 @@ function AffiliationsCard({
   canDeclare: boolean;
 }) {
   const affiliations = usePatientAffiliations(centerId, patientId);
+  const withdraw = useWithdrawAffiliation(centerId, patientId);
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -114,11 +115,18 @@ function AffiliationsCard({
       </CardHeader>
       <CardContent>
         {affiliations.error && <ErrorAlert error={affiliations.error} />}
+        {withdraw.error && <ErrorAlert error={withdraw.error} />}
         {affiliations.data?.length === 0 && (
           <p className="text-muted-foreground">Aucune affiliation déclarée.</p>
         )}
         {affiliations.data && affiliations.data.length > 0 && (
-          <AffiliationsTable affiliations={affiliations.data} today={today()} />
+          <AffiliationsTable
+            affiliations={affiliations.data}
+            today={today()}
+            withdrawableFrom={canDeclare ? centerId : undefined}
+            onWithdraw={(id) => withdraw.mutate(id)}
+            withdrawing={withdraw.isPending}
+          />
         )}
       </CardContent>
     </Card>

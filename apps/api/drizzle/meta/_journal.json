@@ -40,15 +40,36 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1792860272946,
-      "tag": "0005_appointments",
+      "when": 1792865334963,
+      "tag": "0005_affiliations_drop_holder_unique",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
-      "when": 1792860274120,
-      "tag": "0006_appointments_no_overlap",
+      "when": 1792865336323,
+      "tag": "0006_affiliations_holder_exclusion",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792865451960,
+      "tag": "0007_affiliation_status_withdrawn",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792866374196,
+      "tag": "0008_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792866381914,
+      "tag": "0009_appointments_no_overlap",
       "breakpoints": true
     }
   ]

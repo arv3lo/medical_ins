@@ -1,5 +1,6 @@
 import { HOLDER_STATUS_LABELS, isAffiliationActive, type Affiliation } from '@medical-ins/shared';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -16,13 +17,22 @@ export const formatPeriod = (a: Pick<Affiliation, 'startsOn' | 'endsOn'>) =>
     ? `${formatDate(a.startsOn)} au ${formatDate(a.endsOn)}`
     : `depuis le ${formatDate(a.startsOn)}`;
 
-/** A patient's affiliations, as the center sees them. */
+/**
+ * A patient's affiliations, as the center sees them. `withdrawableFrom` is the center allowed
+ * to withdraw its own pending declarations, if the user may.
+ */
 export function AffiliationsTable({
   affiliations,
   today,
+  withdrawableFrom,
+  onWithdraw,
+  withdrawing = false,
 }: {
   affiliations: Affiliation[];
   today: string;
+  withdrawableFrom?: string;
+  onWithdraw?: (affiliationId: string) => void;
+  withdrawing?: boolean;
 }) {
   return (
     <Table>
@@ -33,6 +43,7 @@ export function AffiliationsTable({
           <TableHead>Qualité</TableHead>
           <TableHead>Période</TableHead>
           <TableHead>Statut</TableHead>
+          <TableHead />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -57,6 +68,20 @@ export function AffiliationsTable({
               {a.rejectionReason && (
                 <div className="text-xs text-muted-foreground">{a.rejectionReason}</div>
               )}
+            </TableCell>
+            <TableCell className="text-right">
+              {onWithdraw &&
+                a.status === 'pending' &&
+                a.declaredByOrganizationId === withdrawableFrom && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={withdrawing}
+                    onClick={() => onWithdraw(a.id)}
+                  >
+                    Retirer
+                  </Button>
+                )}
             </TableCell>
           </TableRow>
         ))}

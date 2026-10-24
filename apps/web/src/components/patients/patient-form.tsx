@@ -1,6 +1,7 @@
 import {
   SEX_LABELS,
   SEXES,
+  today,
   type CreatePatientInput,
   type Patient,
   type Sex,
@@ -26,7 +27,8 @@ type Props = {
   onSubmit: (values: Values) => void;
 };
 
-const empty = (value: string) => value.trim() || undefined;
+/** An emptied field is sent as null: on an update, that is what clears the stored value. */
+export const blankToNull = (value: string) => value.trim() || null;
 
 /** Administrative data of a patient, for registration and correction alike. */
 export function PatientForm({ initial, submitLabel, pending, onSubmit }: Props) {
@@ -47,10 +49,10 @@ export function PatientForm({ initial, submitLabel, pending, onSubmit }: Props) 
       firstNames,
       birthDate,
       sex,
-      nationalId: empty(nationalId),
-      phone: empty(phone),
-      region: empty(region),
-      address: empty(address),
+      nationalId: blankToNull(nationalId),
+      phone: blankToNull(phone),
+      region: blankToNull(region),
+      address: blankToNull(address),
     });
   };
 
@@ -77,7 +79,7 @@ export function PatientForm({ initial, submitLabel, pending, onSubmit }: Props) 
           id="birthDate"
           type="date"
           value={birthDate}
-          max={new Date().toISOString().slice(0, 10)}
+          max={today()}
           onChange={(e) => setBirthDate(e.target.value)}
           required
         />

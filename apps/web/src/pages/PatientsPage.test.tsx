@@ -23,6 +23,7 @@ describe('DuplicateWarning', () => {
     const html = renderToString(
       <MemoryRouter>
         <DuplicateWarning
+          message="Un patient existe déjà avec ce CIN"
           duplicates={[
             {
               id: '1',
@@ -40,5 +41,8 @@ describe('DuplicateWarning', () => {
     );
     expect(html).toContain('Rakoto Jean');
     expect(html).toContain('12/03/1985');
+    // The API says why: a CIN match is certain, not a mere resemblance.
+    expect(html).toContain('Un patient existe déjà avec ce CIN');
+    expect(html).not.toContain('semble déjà enregistré');
   });
 });
