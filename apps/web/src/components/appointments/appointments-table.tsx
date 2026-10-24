@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { useChangeAppointmentStatus } from '@/lib/appointments';
 import { formatLocalDate, formatTime } from '@/lib/format';
+import { ConsultButton } from '@/components/consultations/consult-button';
 import { ErrorAlert } from '@/components/error-alert';
 import { AppointmentActions } from './appointment-actions';
 import { AppointmentStatusBadge } from './appointment-status-badge';
@@ -19,21 +20,29 @@ import { RescheduleAppointmentDialog } from './reschedule-appointment-dialog';
 const isMovable = (a: Appointment) =>
   a.status === 'scheduled' && Date.parse(a.startsAt) > Date.now();
 
-/** Appointments of a center; `showDate` for lists spanning several days. */
+const OPEN = ['scheduled', 'arrived'];
+
+/**
+ * Appointments of a center; `showDate` for lists spanning several days. `consultAs`, a doctor's
+ * id, lets that doctor open the consultation of their own open appointments.
+ */
 export function AppointmentsTable({
   centerId,
   appointments,
   canManage,
   showDate = false,
   showPatient = true,
+  consultAs,
 }: {
   centerId: string;
   appointments: Appointment[];
   canManage: boolean;
   showDate?: boolean;
   showPatient?: boolean;
+  consultAs?: string;
 }) {
   const change = useChangeAppointmentStatus(centerId);
+  const hasActions = canManage || Boolean(consultAs);
   return (
     <div className="grid gap-4">
       {change.error && <ErrorAlert error={change.error} />}
@@ -45,7 +54,7 @@ export function AppointmentsTable({
             <TableHead>Médecin</TableHead>
             <TableHead>Motif</TableHead>
             <TableHead>Statut</TableHead>
-            {canManage && <TableHead />}
+            {hasActions && <TableHead />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -71,18 +80,23 @@ export function AppointmentsTable({
               <TableCell>
                 <AppointmentStatusBadge status={a.status} />
               </TableCell>
-              {canManage && (
+              {hasActions && (
                 <TableCell>
                   <div className="flex justify-end gap-2">
-                    {isMovable(a) && (
+                    {a.doctorId === consultAs && OPEN.includes(a.status) && (
+                      <ConsultButton centerId={centerId} appointment={a} />
+                    )}
+                    {canManage && isMovable(a) && (
                       <RescheduleAppointmentDialog centerId={centerId} appointment={a} />
                     )}
-                    <AppointmentActions
-                      status={a.status}
-                      startsAt={a.startsAt}
-                      pending={change.isPending}
-                      onChange={(status) => change.mutate({ id: a.id, status })}
-                    />
+                    {canManage && (
+                      <AppointmentActions
+                        status={a.status}
+                        startsAt={a.startsAt}
+                        pending={change.isPending}
+                        onChange={(status) => change.mutate({ id: a.id, status })}
+                      />
+                    )}
                   </div>
                 </TableCell>
               )}

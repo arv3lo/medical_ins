@@ -32,7 +32,7 @@ export function AppointmentActions({
   );
   if (actions.length === 0) return null;
   return (
-    <div className="flex justify-end gap-2">
+    <div className="flex gap-2">
       {actions.map((a) => (
         <Button
           key={a.to}

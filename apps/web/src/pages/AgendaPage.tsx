@@ -45,6 +45,7 @@ export function AgendaPage() {
         user={user}
         centerId={centerId}
         canManage={canManage}
+        consultAs={canIn(user, centerId, 'medical_record.write') ? user.id : undefined}
         view={view}
         onViewChange={setView}
       />
@@ -60,12 +61,15 @@ export function CenterAgenda({
   user,
   centerId,
   canManage,
+  consultAs,
   view: requestedView,
   onViewChange,
 }: {
   user: CurrentUser;
   centerId: string;
   canManage: boolean;
+  /** A doctor's id: lets them open the consultation of their own open appointments. */
+  consultAs?: string;
   view: AgendaView;
   onViewChange: (view: AgendaView) => void;
 }) {
@@ -118,6 +122,7 @@ export function CenterAgenda({
           centerId={centerId}
           filter={{ ...dayRange(date), doctorId: doctorId === ALL ? undefined : doctorId }}
           canManage={canManage}
+          consultAs={consultAs}
           empty="Aucun rendez-vous ce jour."
         />
       )}
@@ -126,6 +131,7 @@ export function CenterAgenda({
           centerId={centerId}
           filter={{ ...weekRange(date), doctorId: doctorId === ALL ? undefined : doctorId }}
           canManage={canManage}
+          consultAs={consultAs}
           showDate
           empty="Aucun rendez-vous cette semaine."
         />
@@ -135,6 +141,7 @@ export function CenterAgenda({
           centerId={centerId}
           filter={{ ...daysRange(localToday(), MY_DAYS), doctorId: user.id }}
           canManage={canManage}
+          consultAs={consultAs}
           showDate
           empty={`Aucun rendez-vous dans les ${MY_DAYS} prochains jours.`}
         />
@@ -174,12 +181,14 @@ function AppointmentsList({
   centerId,
   filter,
   canManage,
+  consultAs,
   showDate = false,
   empty,
 }: {
   centerId: string;
   filter: AppointmentQuery;
   canManage: boolean;
+  consultAs?: string;
   showDate?: boolean;
   empty: string;
 }) {
@@ -192,6 +201,7 @@ function AppointmentsList({
       centerId={centerId}
       appointments={appointments.data}
       canManage={canManage}
+      consultAs={consultAs}
       showDate={showDate}
     />
   );

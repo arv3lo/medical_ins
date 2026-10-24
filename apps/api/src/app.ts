@@ -9,6 +9,7 @@ import type { Env } from './env.js';
 import { HttpError } from './lib/errors.js';
 import { affiliationRoutes } from './modules/affiliations/routes.js';
 import { appointmentRoutes } from './modules/appointments/routes.js';
+import { consultationRoutes } from './modules/consultations/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { organizationRoutes } from './modules/organizations/routes.js';
 import { patientRoutes } from './modules/patients/routes.js';
@@ -52,6 +53,7 @@ export async function buildApp({ db, env }: { db: Db; env: Env }) {
   patientRoutes(app, { db });
   affiliationRoutes(app, { db });
   appointmentRoutes(app, { db });
+  consultationRoutes(app, { db });
 
   return app;
 }

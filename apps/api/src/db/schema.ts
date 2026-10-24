@@ -5,6 +5,7 @@ import {
   ORGANIZATION_TYPES,
   ROLES,
   SEXES,
+  type Vitals,
 } from '@medical-ins/shared';
 import { sql } from 'drizzle-orm';
 import {
@@ -195,6 +196,79 @@ export const appointments = pgTable(
     index().on(t.patientId),
     check('appointments_ends_after_start', sql`${t.endsAt} > ${t.startsAt}`),
   ],
+);
+
+/** ICD-10 reference: diagnoses can only use a code listed here. */
+export const icd10Codes = pgTable('icd10_codes', {
+  code: text('code').primaryKey(),
+  label: text('label').notNull(),
+});
+
+/**
+ * A visit with a doctor. Editable by its author while a draft; once `signed_at` is set, a trigger
+ * (migration 0008) rejects any change to it and to its diagnoses: corrections become addenda.
+ */
+export const consultations = pgTable(
+  'consultations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    doctorId: uuid('doctor_id')
+      .notNull()
+      .references(() => users.id),
+    appointmentId: uuid('appointment_id')
+      .unique()
+      .references(() => appointments.id),
+    reason: text('reason').notNull(),
+    examination: text('examination'),
+    vitals: jsonb('vitals').$type<Vitals>().notNull().default({}),
+    notes: text('notes'),
+    signedAt: timestamp('signed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index().on(t.patientId), index().on(t.organizationId)],
+);
+
+export const diagnoses = pgTable(
+  'diagnoses',
+  {
+    consultationId: uuid('consultation_id')
+      .notNull()
+      .references(() => consultations.id),
+    code: text('code')
+      .notNull()
+      .references(() => icd10Codes.code),
+    isPrimary: boolean('is_primary').notNull(),
+    position: integer('position').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.consultationId, t.code] }),
+    uniqueIndex('diagnoses_one_primary')
+      .on(t.consultationId)
+      .where(sql`${t.isPrimary}`),
+  ],
+);
+
+/** Append-only notes added to a signed consultation (trigger in migration 0008). */
+export const consultationAddenda = pgTable(
+  'consultation_addenda',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    consultationId: uuid('consultation_id')
+      .notNull()
+      .references(() => consultations.id),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.consultationId)],
 );
 
 /** Append-only: a database trigger rejects UPDATE and DELETE (see migrations). */
