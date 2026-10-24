@@ -25,4 +25,12 @@ describe('roles', () => {
       expect(hasPermission([role], 'patient.read_admin')).toBe(false);
     }
   });
+
+  it('lets care roles read the agenda, and only reception manage it', () => {
+    expect(hasPermission(['doctor'], 'appointment.read')).toBe(true);
+    expect(hasPermission(['nurse'], 'appointment.read')).toBe(true);
+    expect(hasPermission(['reception'], 'appointment.read')).toBe(true);
+    expect(hasPermission(['doctor'], 'appointment.manage')).toBe(false);
+    expect(hasPermission(['billing'], 'appointment.read')).toBe(false);
+  });
 });
