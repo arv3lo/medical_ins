@@ -1,113 +1,157 @@
-# Code review: PR #1 "Socle technique : monorepo, API, app web, docker-compose"
+# Code review: PR #2 (roadmap) and PR #3 (shadcn/ui)
 
-- Target: PR #1, `feat/socle-technique` (0cc65ac) against `main`
-- Effort: xhigh (recall-oriented, no verification pass, so some findings may be uncertain)
-- Scope: whole diff except `pnpm-lock.yaml` and the generated drizzle snapshots
+- Targets:
+  - PR #2 "docs: roadmap détaillée du socle à la V2", `docs/roadmap` (3815143) against `main`
+  - PR #3 "P1.0 : design system shadcn/ui", `feat/p1-0-shadcn` (2cd8408) against `main`
 - Date: 2026-10-24
+- Checked: whole diffs except `pnpm-lock.yaml`. The roadmap was cross-checked against the
+  permission matrix (`packages/shared/src/roles.ts`) and the stack on `main`. The 7 shadcn
+  components were diffed against the live registry (`ui.shadcn.com/r/styles/new-york-v4`).
+  Prettier 3.9 `--check` passes on both PRs (CI does not run it). CI (lint, typecheck, test,
+  build, Docker) is green on both.
+- Not in scope: the stacked PRs #4 and #5.
 
 ## Fix status
 
-Fixes are on `feat/socle-technique`, one commit per finding, each bug fix reproduced first by a
-failing test (or by hand for build, Docker and nginx issues). Final run: lint, typecheck, 29 tests
-(API against a real Postgres 16), build, both Docker images, API image smoke test.
+Fixes are on each PR's branch, one commit per finding. Roadmap edits were rebased onto the
+owner's later commit `957baa3` (deployment and Garage decisions; no overlap). PR #3 final run:
+lint, typecheck, 11 tests (7 web, 4 shared), build, web Docker image; CI green on both PRs.
 
-| #   | Finding                                  | Outcome                                                                                                                                      | Commit    |
-| --- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1   | Account takeover through add-member      | Fixed (owner's choice): only the super admin creates accounts (`POST /api/users`); add-member attaches existing accounts only, 404 otherwise | `516b9cb` |
-| 2   | Audit written outside the transaction    | Fixed: `audit(tx, …)` inside the change's transaction (organizations, memberships, login, logout)                                            | `7ddbc6c` |
-| 3   | Login timing reveals accounts            | Fixed: verify against a dummy hash when no active account matches                                                                            | `241e986` |
-| 4   | TRUNCATE wipes the audit log             | Fixed: migration `0002` adds a statement-level TRUNCATE trigger; test resets skip triggers explicitly                                        | `39f284a` |
-| 5   | `trustProxy: true`                       | Fixed: `TRUST_PROXY_HOPS` (default 0, docker-compose sets 1 for Caddy)                                                                       | `5cb7409` |
-| 6   | Account creation not audited             | Fixed with #1: `user.create` audited, without the password hash                                                                              | `516b9cb` |
-| 7   | Seed password in the api container       | Fixed: one-off `seed` service (`docker compose run --rm seed`)                                                                               | `8a7e9a2` |
-| 8   | Migrations folder wrong from `dist/`     | Fixed: folder resolved from the package root; `MIGRATIONS_DIR` removed                                                                       | `a3cb663` |
-| 9   | Main-module check misses encoded paths   | Fixed: separate `migrate-cli.ts` entry, no main-module check                                                                                 | `a3cb663` |
-| 10  | Password not URL-encoded in DATABASE_URL | Fixed in docs: compose, `.env.example` and README ask for a URL-safe password (`openssl rand -hex 32`)                                       | `8a7e9a2` |
-| 11  | `.env` not loaded by vitest              | Fixed: `vitest.config.ts` loads the repository `.env`                                                                                        | `af0c2f1` |
-| 12  | List error hidden, no global 401         | Fixed: any 401 clears the session; the organization list shows its error                                                                     | `589841f` |
-| 13  | Race on a new email                      | Fixed with #1: `POST /api/users` uses `ON CONFLICT DO NOTHING` and answers 409                                                               | `516b9cb` |
-| 14  | Outage redirects to login                | Fixed: the layout shows the error with a retry button                                                                                        | `ae13c52` |
-| 15  | `index.html` cached                      | Fixed: `Cache-Control: no-cache` on `index.html` and SPA routes                                                                              | `b061a60` |
+| #   | Finding                               | Outcome                                                                                                                                                                 | Commit            |
+| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 1   | Claude attribution                    | Fixed: footer removed from both PR descriptions (`gh pr edit`); roadmap items now say `(en cours)`. PRs #4 and #5 (out of scope) still carry the footer                 | `aca042e` (PR #2) |
+| 2   | P2.4 depends on unstarted P1.5        | Fixed: P2.4 gets P2.2's kind of fallback (code validated on its format, linked to `icd10_codes` by a later migration)                                                   | `54d08bb` (PR #2) |
+| 3   | P2.1 searches by insured number       | Fixed: that search moved to P2.2                                                                                                                                        | `54d08bb` (PR #2) |
+| 4   | Permissions missing from the matrix   | Fixed: `patient.update` (P2.1 edits, P2.2 declarations, as PRs #4/#5 implement), `insurance_plan.manage` (P1.6); P2.1 readers = every role with `patient.read_admin`    | `4eaa752` (PR #2) |
+| 5   | PostgreSQL extensions not mentioned   | Fixed: `unaccent` + `pg_trgm` with an immutable wrapper (P1.5), `btree_gist` (P1.7, P2.3)                                                                               | `c365b04` (PR #2) |
+| 6   | P1.3 admin invariant                  | Fixed: an organization always keeps at least one admin, whoever removes                                                                                                 | `14f9bec` (PR #2) |
+| 7   | Spec link to a private claude.ai page | Not fixed: the spec is a Claude Docs document; exporting it into the repo (or sharing it elsewhere) is the owner's call                                                 | —                 |
+| 8   | Inline theme script vs. strict CSP    | Fixed: dark variant and tokens on `prefers-color-scheme`; test `index-html.test.ts` (seen failing first) forbids inline scripts. Built CSS checked, no new browser pass | `b576a75` (PR #3) |
+| 9   | `color-scheme` dropped                | Fixed: `color-scheme: light dark` on `:root`                                                                                                                            | `63a5507` (PR #3) |
+| 10  | Components drift from the registry    | Fixed: `shadcn add --overwrite` on the 7 components. The registry now imports `cn` from shadcn's new `cn` npm package; kept `@/lib/utils` instead (no new dependency)   | `b87d406` (PR #3) |
+| 11  | Node types in browser code            | Fixed: `tsconfig.node.json` for `vite.config.ts`; `typecheck` runs both. Checked: `process.env` in `src` typechecked before, fails after                                | `22da497` (PR #3) |
+| 12  | Build-only packages in `dependencies` | Fixed: moved to `devDependencies`, lockfile updated                                                                                                                     | `3ae642d` (PR #3) |
 
-Below the cap:
+Follow-up: PR #4 (and #5 on top of it) is stacked on `feat/p1-0-shadcn` and needs a rebase onto
+its new commits. They only add new files (`ui/dialog.tsx`, `ui/badge.tsx`), so no conflict is
+expected; those two were probably hand-written too and are worth the same `add --overwrite`.
 
-| Item                                         | Outcome                                                                                                                                                                              | Commit    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
-| Claude attribution on efdd462 and PR body    | Fixed: commit rewritten as `0cc65ac` (author and committer set to the owner, `Co-Authored-By`/`Claude-Session` trailers dropped, same tree); credit line removed from the PR #1 body | `0cc65ac` |
-| `onRequest` runs 3 queries per request       | Not fixed: a performance tweak with no measured problem; revisit when the auth hook grows                                                                                            | —         |
-| argon2 hash inside the transaction           | Fixed with #1: `POST /api/users` hashes before opening the transaction                                                                                                               | `516b9cb` |
-| Organization type labels written three times | Fixed: `ORGANIZATION_TYPE_LABELS` in `packages/shared`                                                                                                                               | `0271497` |
-| `addMemberInputSchema` only in the API       | Fixed with #1: moved to `packages/shared`                                                                                                                                            | `516b9cb` |
-| `organizationSchema` null/updatedAt          | Fixed                                                                                                                                                                                | `28b3589` |
-| Expired sessions never purged                | Fixed: purged on each login                                                                                                                                                          | `008c06b` |
-| Tests near the login rate limit              | Fixed: each test login comes from its own address                                                                                                                                    | `d9c80c1` |
-| `/organizations` route not guarded           | Not fixed: the link is hidden for non-super-admins, the API answers 403 and the page now shows "Accès refusé" (#12); a client-side guard would only duplicate the server rule        | —         |
-| Seed ignores an existing non-admin email     | Fixed: the seed fails instead of reporting success; it never promotes an account silently                                                                                            | `6b227ba` |
-| `COOKIE_SECURE` false in production          | Fixed: defaults to Secure when `NODE_ENV=production`                                                                                                                                 | `f7a3a5a` |
-| `engines` allows Node < 22.9                 | Fixed: `>=22.9`                                                                                                                                                                      | `5b7c630` |
-| `api()` drops a `Headers` instance           | Fixed                                                                                                                                                                                | `fbc015a` |
+## Both PRs
 
-## Findings (most severe first)
+### 1. Claude attribution in the PR bodies and the roadmap (medium)
 
-1. **apps/api/src/modules/organizations/routes.ts:84**: adding a member by email silently reuses any existing account, and the first person to add an email sets its password. That lets someone take over an account before its owner ever uses it.
-   - Scenario: the center admin of center A adds `advisor@ostie.mg` as `doctor` and sets `initialPassword` to a value they know. Later the OSTIE insurer manager (or the super admin) adds `advisor@ostie.mg` as `medical_advisor`. The account already exists, so `fullName`/`initialPassword` are ignored and nobody is told. The center admin can now log in as an OSTIE medical advisor (`coverage_request.decide`). The same branch also reveals whether an email has an account: a 400 asking for `fullName` and `initialPassword` means no account, a 201 or 409 means one exists.
+- Where: PR #2 and #3 descriptions (`_Generated by [Claude Code](https://claude.ai/code/session_…)_`);
+  `docs/ROADMAP.md:55, 135, 149, 158, 167` (`(en cours : Claude)`).
+- Why: `CLAUDE.md` says never add Claude attribution to commits or PRs, "nothing similar". The
+  footer also publishes a private session URL. Commit authors and messages are clean.
+- Fix: `gh pr edit 2 --body-file …` / `gh pr edit 3 --body-file …` without the footer; write
+  `(en cours)` (or the owner's name) in the roadmap.
 
-2. **apps/api/src/modules/organizations/routes.ts:110** (also line 41 and `apps/api/src/lib/audit.ts:15`): audit entries are written after the action's transaction commits, outside it. `audit(db: Db, …)` only accepts the root `Db`, so callers cannot put the audit write inside the transaction.
-   - Scenario: the organization insert at line 40 succeeds, then the audit insert fails (connection reset, timeout). The client gets a 500, the organization stays without any audit row, and the user clicks "Ajouter" again, which creates a duplicate organization (there is no unique constraint on the name). The same thing happens with memberships: the transaction commits, the audit fails, and the retry returns 409. That breaks the README's promise that every action is audited. Fix: let `audit` take a `Db | Tx` and run each action and its audit write in one transaction.
+## PR #2: roadmap
 
-3. **apps/api/src/modules/auth/routes.ts:21**: login only runs argon2 `verifyPassword` when the user exists and is active. Unknown or deactivated emails answer measurably faster.
-   - Scenario: timing `POST /api/auth/login` across candidate emails shows which addresses have active accounts (roughly a 20–50 ms argon2 gap), even though the error message is the same. Fix: verify against a dummy hash when the user is missing or inactive.
+### 2. P2.4 is in progress but depends on P1.5, which hasn't started (medium)
 
-4. **apps/api/drizzle/0001_audit_logs_append_only.sql:9**: the append-only trigger is `BEFORE UPDATE OR DELETE … FOR EACH ROW`, so it does not cover `TRUNCATE`.
-   - Scenario: `TRUNCATE audit_logs`, or `TRUNCATE users CASCADE` (CASCADE follows the foreign key from `audit_logs`), wipes the whole audit log without error. The test helper `resetDb` relies on exactly this. Fix: add a `BEFORE TRUNCATE … FOR EACH STATEMENT` trigger, and have tests disable it or use a dedicated role.
+- Where: `docs/ROADMAP.md:168` (P2.4 « Dépend de : … P1.5 (CIM-10) ») vs `:97` (P1.5 unchecked,
+  nobody on it).
+- Why: `diagnoses` needs `icd10_codes` to reference. Built in this order, P2.4 either invents
+  its own code table (two homes for one rule) or stores unchecked codes with no plan to migrate.
+- Fix: do the `icd10_codes` part of P1.5 before P2.4, or state the fallback the way P2.2 does
+  (free code validated by format, migrated to a foreign key when P1.5 lands).
 
-5. **apps/api/src/app.ts:18**: `trustProxy: true` trusts every `X-Forwarded-For` hop, so a client can set `request.ip` to anything. The login rate limit and the audit `ip` column are both keyed on it.
-   - Scenario: under `pnpm dev` the API binds `0.0.0.0:3000`, and the same happens with any deployment where the API is reachable without Caddy or sits behind another proxy or CDN. An attacker sends a fresh `X-Forwarded-For` value on each attempt, gets unlimited login attempts past the 10/min limit, and forges the IPs in the audit log. Fix: trust a hop count (`1`) or the Caddy network.
+### 3. P2.1 searches by insured number, which only exists with P2.2 (medium)
 
-6. **apps/api/src/modules/organizations/routes.ts:92**: creating a new user account (with a password chosen by the admin) writes no audit entry of its own. Only `membership.create` is logged.
-   - Scenario: a center admin creates accounts through add-member. Searching `audit_logs` for `entity_type='user'` finds no creation event, and nothing records who chose the initial credentials.
+- Where: `docs/ROADMAP.md:139` (`?q=` « nom, CIN, téléphone, numéro d'assuré »), P2.1 depends only
+  on P0.
+- Why: the insured number lives in `affiliations` (P2.2). P2.1's acceptance can't be met by P2.1
+  alone, and P2.2 (now stacked on P2.1) would have to change P2.1's search.
+- Fix: move the insured-number search to P2.2's deliverables and acceptance criteria.
 
-7. **docker-compose.yml:34**: `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` stay in the environment of the long-running `api` container.
-   - Scenario: anyone with `docker inspect` or `/proc/1/environ` access can read the super-admin password in plaintext for as long as the container runs. There is no endpoint to change the password, so the seeded one stays valid. Pass the values only to the one-off `docker compose exec -e … api node dist/seed.js` instead.
+### 4. Items rely on permissions the matrix doesn't have (medium)
 
-8. **apps/api/src/db/migrate.ts:10**: the fallback migrations folder `../../drizzle` is relative to `import.meta.url`. That is correct from `src/db/migrate.ts` but wrong from the bundled `dist/migrate.js`.
-   - Scenario: `pnpm --filter @medical-ins/api start` (package.json `start`) without `MIGRATIONS_DIR` resolves to `apps/drizzle`, and `migrate()` fails with "Can't find meta/_journal.json". Only the Docker image works, because it sets `MIGRATIONS_DIR`.
+- Where: `docs/ROADMAP.md:145` (P2.1: `reception` « crée et modifie »), `:152` (P2.2:
+  « ajout par l'accueil »), `:111` (P1.6: CRUD « réservé à `insurer_manager` »).
+- Why: `roles.ts` has `patient.create` but no update permission; nothing lets `reception`
+  touch affiliations; nothing covers insurance plans. Without a name in the roadmap, each PR picks
+  one (or reuses an unrelated one like `patient.create` for edits). P2.1's acceptance also names
+  only `billing` and `center_admin` as readers, while `doctor`, `nurse` and `pharmacist` have
+  `patient.read_admin` too, so a test written from the text would miss them.
+- Fix: in each item, name the permission it adds (e.g. `patient.update`, `affiliation.declare`,
+  `insurance_plan.manage`) and which roles get it; phrase read access as "every role with
+  `patient.read_admin`".
 
-9. **apps/api/src/db/migrate.ts:17**: the main-module check `import.meta.url === \`file://${process.argv[1]}\``misses whenever the path is percent-encoded (spaces, accents such as`Développement/`) or reached through a symlink (`import.meta.url`is the real path,`argv[1]` is not).
-   - Scenario: `pnpm db:migrate` in such a checkout does nothing and exits 0 without printing "Migrations applied", leaving an unmigrated database. Fix: compare against `pathToFileURL(process.argv[1]).href`, or move the CLI into a separate entry file.
+### 5. PostgreSQL extensions the criteria need are not mentioned (low)
 
-10. **docker-compose.yml:29**: `DATABASE_URL` is built from `${POSTGRES_PASSWORD}` without URL-encoding.
-    - Scenario: following the README ("changer les mots de passe") with a generated password containing `@`, `#`, `/`, `?` or `%` gives a malformed or misparsed URL. The API then fails at startup in `env.ts` or connects with the wrong credentials, while the `db` container starts fine.
+- Where: `docs/ROADMAP.md:104` (P1.5 `unaccent` + trigram index), `:120` (P1.7 exclusion
+  constraint), `:163` (P2.3 `tstzrange` exclusion per doctor).
+- Why: an exclusion constraint mixing `uuid =` with `&&` needs `btree_gist`; a trigram index
+  needs `pg_trgm`; `unaccent()` is not `IMMUTABLE`, so it can't be indexed directly. Found
+  mid-item, these become surprise migrations.
+- Fix: one line per item: `CREATE EXTENSION btree_gist` / `pg_trgm, unaccent`, and an immutable
+  wrapper function for `unaccent` in the index.
 
-11. **apps/api/test/helpers.ts:10**: the integration tests read `process.env.TEST_DATABASE_URL`, but nothing loads the repository `.env` for `vitest run`. Vitest does not put arbitrary `.env` variables into `process.env`.
-    - Scenario: a developer follows the README (`cp .env.example .env`, which defines `TEST_DATABASE_URL`, then `pnpm test`). Every API integration suite is skipped by `describe.skipIf`, and the run is still green.
+### 6. P1.3's admin invariant only covers removing oneself (low)
 
-12. **apps/web/src/pages/OrganizationsPage.tsx:55**: the list query's error is never rendered, and nothing handles 401 globally.
-    - Scenario: the session expires after 12 h (the `me` query is never refetched, since focus refetch is off), or the API returns 403/500. The page shows an empty "Organisations" table with no message, and the user is never sent back to the login page.
+- Where: `docs/ROADMAP.md:86`.
+- Why: « un admin ne peut pas retirer son propre dernier rôle d'admin » still lets the super admin
+  remove an organization's only admin and leave it unmanaged.
+- Fix: « une organisation garde toujours au moins un admin » (applies to every caller).
 
-13. **apps/api/src/modules/organizations/routes.ts:92**: "find user by email, then insert" is a race. Two concurrent add-member calls for the same new email both see no user.
-    - Scenario: the second insert violates `users_email_unique`. The error handler maps that to a 500 "Erreur interne" instead of 409, or instead of reusing the account.
+### 7. The spec link points at a private claude.ai artifact (low)
 
-14. **apps/web/src/Layout.tsx:9**: when `/auth/me` fails with anything other than 401 (API down, 500, network error), `data` is `undefined`, and the layout redirects to `/login` as if the user were logged out.
-    - Scenario: during a short API outage, logged-in users are sent to the login form, and their login attempts fail with "Erreur interne". The outage looks like a lost session.
+- Where: `docs/ROADMAP.md:4`.
+- Why: other contributors (and CI reviewers) can't open it; the roadmap says it "derives" from
+  it.
+- Fix: commit the spec (e.g. `docs/cahier-des-charges.md`) or link a shared location.
 
-15. **apps/web/nginx.conf:11**: `index.html` is served with no `Cache-Control`, so browsers can cache it heuristically (Last-Modified plus ETag).
-    - Scenario: after a redeploy, a browser keeps the old `index.html`, which references hashed `/assets/*` files that no longer exist in the new image. The result is a blank page until a hard refresh. Add `Cache-Control: no-cache` for `index.html`.
+## PR #3: shadcn/ui
 
-## Below the 15-finding cap
+### 8. Inline theme script blocks the strict CSP planned in P6.2 (medium)
 
-These are lower priority; correctness findings take precedence when the cap applies.
+- Where: `apps/web/index.html:7-13`.
+- Why: a strict CSP (`script-src 'self'`) refuses inline scripts, so P6.2 would need
+  `'unsafe-inline'` or a hand-maintained hash. The script does what CSS does on its own.
+- Fix (KISS): drop the script; in `src/index.css` use
+  `@custom-variant dark (@media (prefers-color-scheme: dark));` and put the `.dark` tokens in
+  `@media (prefers-color-scheme: dark) { :root { … } }`. If a manual theme toggle comes later,
+  move the script to a file served from `'self'` then.
 
-- **Conventions (`~/.claude/CLAUDE.md`, "Git attribution")**: the rule says "Do NOT append the `Co-Authored-By: Claude <...>` trailer to commit messages" and "Do NOT add `🤖 Generated with [Claude Code](https://claude.com/claude-code)` (or any "Generated with Claude Code" credit) to PR bodies". Commit 0cc65ac ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>` and `Claude-Session: …`, and its author is `Claude <noreply@anthropic.com>`. The PR #1 body ends with `_Generated by [Claude Code](https://claude.ai/code/session_…)_`.
-- **Efficiency**, `apps/api/src/plugins/auth.ts:18`: the `onRequest` hook runs 3 sequential queries (session, user, memberships) on every request that has a cookie, including `/api/health`. It also runs before the route-level rate-limit hook on login. A single join would do, or loading lazily in `requireUser`.
-- **Efficiency**, `apps/api/src/modules/organizations/routes.ts:97`: the argon2 hash is computed inside `db.transaction`, which holds a pooled connection for the length of the hash. Hash before opening the transaction.
-- **Reuse**, `apps/web/src/pages/HomePage.tsx:25`, `OrganizationsPage.tsx:6` and `:44`: the organization type labels are written three times. Add an `ORGANIZATION_TYPE_LABELS` next to `ROLE_LABELS` in `packages/shared/src/roles.ts`.
-- **Reuse**, `apps/api/src/modules/organizations/routes.ts:14`: `addMemberInputSchema` lives in the API, while `createOrganizationInputSchema` is in `packages/shared/src/schemas/organizations.ts`. The web app will need it.
-- `packages/shared/src/schemas/organizations.ts:14`: `organizationSchema` types `taxId`, `region` and `address` as `string | undefined`, but the API returns `null`, so the type contract is wrong (and `updatedAt` is missing).
-- `apps/api/src/lib/session.ts`: expired sessions are never purged, so the table grows without bound.
-- `apps/api/test/organizations.test.ts`: the tests log in about 6 times per file against a 10/min per-IP limit. A few more tests will start getting 429s.
-- `apps/web/src/main.tsx:23`: the `/organizations` route is not guarded. Non-super-admins can open it and see the create form, which then returns 403.
-- `apps/api/src/db/seed.ts:15`: an existing user with the seed email is neither promoted to super admin nor updated, but the script still reports "already exists".
-- `apps/api/src/env.ts:8`: `COOKIE_SECURE` defaults to `false` even when `NODE_ENV=production`.
-- `apps/api/package.json:7`: `--env-file-if-exists` needs Node 22.9 or later, but `engines` allows `>=22`.
-- `apps/web/src/lib/api.ts:14`: spreading `init.headers` drops headers passed as a `Headers` instance.
+### 9. `color-scheme` dropped: native widgets stay light in dark mode (low)
+
+- Where: `apps/web/src/index.css:10` (`:root`); the deleted `styles.css` had
+  `color-scheme: light dark`.
+- Why: scrollbars, autofill and native date/time pickers (coming with P2.3) render light on the
+  dark theme.
+- Fix: `color-scheme: light dark;` in `:root` (or `dark` in the dark block).
+
+### 10. Hand-written components already differ from the registry (low)
+
+- Where: `apps/web/src/components/ui/button.tsx:20-25`, `card.tsx:22`, and class order in all 7.
+- Why: the PR says the registry was unreachable; it is reachable now. Current registry has
+  button sizes `xs`, `icon-xs`, `icon-sm`, `icon-lg` and no `shadow-xs` on
+  default/secondary/destructive; `CardHeader` uses `gap-2`. A later `shadcn add` of a component
+  that uses those sizes would render wrong, and `diff`/`--overwrite` updates get noisy.
+- Fix: from `apps/web`,
+  `pnpm dlx shadcn@latest add --overwrite button input label card table select alert`, then
+  `pnpm format`.
+
+### 11. Node types apply to all browser code (low)
+
+- Where: `apps/web/tsconfig.json:6` (`"types": ["vite/client", "node"]`), added for
+  `vite.config.ts`.
+- Why: `process.env.X` or `Buffer` in a component now typechecks and fails only at runtime.
+- Fix: the Vite template split: `tsconfig.node.json` (includes `vite.config.ts`, types `node`)
+  and the app tsconfig without `node`.
+
+### 12. Build-only packages listed as runtime dependencies (nit)
+
+- Where: `apps/web/package.json:15, 25, 26` (`@tailwindcss/vite`, `tailwindcss`,
+  `tw-animate-css`).
+- Why: they only run at build time; no runtime effect (the Docker build installs everything),
+  but the split documents what ships.
+- Fix: move them to `devDependencies`.
+
+## Verdict
+
+- PR #2: mergeable after #1–#4 (text-only edits). #5–#7 can go in the same pass.
+- PR #3: works as described. Fix #8 before P6.2 at the latest (cheap now). #9–#11 are small
+  follow-ups. Remove the attribution footer (#1) before merging.
