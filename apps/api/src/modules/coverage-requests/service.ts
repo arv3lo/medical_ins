@@ -19,6 +19,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
+import { iso } from '../../lib/iso.js';
 import { escapeLike } from '../../lib/sql.js';
 import { requireLinkedPatient } from '../patients/service.js';
 
@@ -199,8 +200,6 @@ export async function countItems(db: Db | Tx, id: string): Promise<number> {
 
 const center = alias(organizations, 'center');
 const insurer = alias(organizations, 'insurer');
-
-const iso = (date: Date) => date.toISOString();
 
 /**
  * One request as both sides see it (FR-012): explicit columns only, never a table spread, so a
