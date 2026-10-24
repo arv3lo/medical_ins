@@ -1,6 +1,9 @@
 # Production-like stack: `cp .env.example .env`, adjust the secrets, then `docker compose up -d --build`.
 name: medical-ins
 
+# POSTGRES_PASSWORD goes into a URL unencoded: keep it URL-safe (e.g. `openssl rand -hex 32`).
+x-database-url: &database-url postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+
 services:
   db:
     image: postgres:16-alpine
@@ -21,19 +24,18 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    image: medical-ins-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: *database-url
       API_PORT: 3000
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       # Only Caddy reaches the API (no published port).
       TRUST_PROXY_HOPS: 1
       COOKIE_SECURE: 'true'
-      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
     healthcheck:
       test:
         [
@@ -45,6 +47,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # One-off, after `up`: `docker compose run --rm seed`. The admin password stays out of the
+  # long-running api container.
+  seed:
+    image: medical-ins-api
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: *database-url
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    command: ['node', 'dist/seed.js']
 
   web:
     build:

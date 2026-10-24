@@ -36,9 +36,9 @@ Les tests d'intégration de l'API utilisent `TEST_DATABASE_URL` ; sans cette var
 ## Auto-hébergement
 
 ```bash
-cp .env.example .env    # changer les mots de passe et DOMAIN
+cp .env.example .env    # changer les mots de passe (sans caractères spéciaux d'URL) et DOMAIN
 docker compose up -d --build
-docker compose exec api node dist/seed.js
+docker compose run --rm seed
 ```
 
 Caddy sert l'application sur `https://$DOMAIN` (certificat Let's Encrypt automatique, ou certificat
