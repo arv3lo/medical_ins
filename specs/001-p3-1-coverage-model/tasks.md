@@ -225,18 +225,18 @@ réussit écrit le statut, l'événement et l'audit ensemble.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [ ] T027 [P] [US5] Atomicité dans `apps/api/test/coverage-request-transitions.test.ts` : avec `withAuditFailing` (`apps/api/test/helpers.ts`), une transition répond 500, et le statut et les événements restent inchangés.
-- [ ] T028 [P] [US5] Aucun texte médical dans l'audit (SC-002), dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [X] T027 [P] [US5] Atomicité dans `apps/api/test/coverage-request-transitions.test.ts` : avec `withAuditFailing` (`apps/api/test/helpers.ts`), une transition répond 500, et le statut et les événements restent inchangés.
+- [X] T028 [P] [US5] Aucun texte médical dans l'audit (SC-002), dans `apps/api/test/coverage-request-transitions.test.ts` :
   - un parcours complet (création, modification, soumission, examen, complément, nouvelle soumission, examen, accord partiel, utilisation) avec un motif, un libellé d'acte et un diagnostic repérables ;
   - ni le motif, ni le libellé, ni le code ou le libellé du diagnostic n'apparaissent dans le JSON d'une ligne de `audit_logs`.
-- [ ] T029 [P] [US5] Course déterministe (SC-003), dans `apps/api/test/coverage-request-transitions.test.ts` : le test tient la ligne avec `SELECT … FOR UPDATE` dans sa propre transaction, envoie deux décisions (`granted` et `rejected`), attend qu'elles soient bloquées (`pg_stat_activity`), puis relâche. Résultat attendu : `[200, 409]`, et un seul événement de décision. Réutiliser l'approche du test de course de P2.4 (`whileSigning`).
-- [ ] T030 [P] [US5] Historique en ajout seul, dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [X] T029 [P] [US5] Course déterministe (SC-003), dans `apps/api/test/coverage-request-transitions.test.ts` : le test tient la ligne avec `SELECT … FOR UPDATE` dans sa propre transaction, envoie deux décisions (`granted` et `rejected`), attend qu'elles soient bloquées (`pg_stat_activity`), puis relâche. Résultat attendu : `[200, 409]`, et un seul événement de décision. Réutiliser l'approche du test de course de P2.4 (`whileSigning`).
+- [X] T030 [P] [US5] Historique en ajout seul, dans `apps/api/test/coverage-request-transitions.test.ts` :
   - UPDATE et DELETE directs sur `coverage_request_events` échouent avec le message du trigger ;
   - après chaque scénario du fichier, le `to_status` du dernier événement égale le `status` de la demande (SC-004).
 
 ### Implémentation
 
-- [ ] T031 [US5] Corriger, dans `apps/api/src/modules/coverage-requests/transitions.ts` et `service.ts`, tout ce que T027 à T030 font échouer. En principe rien, si T018 et T019 ont suivi le plan : dans ce cas, ces tests ne font que couvrir, et le message de commit le dit. Vérifier leur pouvoir de détection en cassant volontairement l'ordre verrou → contrôle, puis en rétablissant.
+- [X] T031 [US5] Corriger, dans `apps/api/src/modules/coverage-requests/transitions.ts` et `service.ts`, tout ce que T027 à T030 font échouer. En principe rien, si T018 et T019 ont suivi le plan : dans ce cas, ces tests ne font que couvrir, et le message de commit le dit. Vérifier leur pouvoir de détection en cassant volontairement l'ordre verrou → contrôle, puis en rétablissant.
 
 **Point de contrôle** : SC-002, SC-003 et SC-004 sont prouvés.
 
