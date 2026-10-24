@@ -1,5 +1,10 @@
-import type { CreateCoverageRequestInput, UpdateCoverageRequestInput } from '@medical-ins/shared';
-import { and, eq, ilike, inArray, or } from 'drizzle-orm';
+import type {
+  CoverageRequestStatus,
+  CreateCoverageRequestInput,
+  UpdateCoverageRequestInput,
+} from '@medical-ins/shared';
+import { and, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from '../../db/client.js';
 import {
   affiliations,
@@ -8,6 +13,9 @@ import {
   coverageRequests,
   icd10Codes,
   medicalActs,
+  organizations,
+  patients,
+  users,
 } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 import { escapeLike } from '../../lib/sql.js';
@@ -158,4 +166,141 @@ export async function countItems(db: Db | Tx, id: string): Promise<number> {
     .from(coverageRequestItems)
     .where(eq(coverageRequestItems.coverageRequestId, id));
   return rows.length;
+}
+
+const center = alias(organizations, 'center');
+const insurer = alias(organizations, 'insurer');
+
+/** Who reads: the requesting center sees its requests; the insurer sees them once submitted. */
+export type Side = { actor: 'center' | 'insurer'; organizationId: string };
+
+const reachableBy = ({ actor, organizationId }: Side) =>
+  actor === 'center'
+    ? eq(coverageRequests.centerId, organizationId)
+    : and(eq(coverageRequests.insurerId, organizationId), ne(coverageRequests.status, 'draft'));
+
+const iso = (date: Date) => date.toISOString();
+
+/**
+ * One request as both sides see it (FR-012): explicit columns only, never a table spread, so a
+ * new column never reaches an insurer by accident. Nothing else of the record is joined.
+ */
+export async function findCoverageRequest(db: Db | Tx, id: string, side: Side) {
+  const [row] = await db
+    .select({
+      request: coverageRequests,
+      center: { id: center.id, name: center.name },
+      insurer: { id: insurer.id, name: insurer.name },
+      patient: {
+        id: patients.id,
+        lastName: patients.lastName,
+        firstNames: patients.firstNames,
+        birthDate: patients.birthDate,
+        nationalId: patients.nationalId,
+      },
+      affiliation: {
+        id: affiliations.id,
+        memberNumber: affiliations.memberNumber,
+        holderStatus: affiliations.holderStatus,
+        planName: affiliations.planName,
+        startsOn: affiliations.startsOn,
+        endsOn: affiliations.endsOn,
+        status: affiliations.status,
+      },
+      diagnosis: { code: icd10Codes.code, label: icd10Codes.label },
+      createdBy: { fullName: users.fullName },
+    })
+    .from(coverageRequests)
+    .innerJoin(center, eq(center.id, coverageRequests.centerId))
+    .innerJoin(insurer, eq(insurer.id, coverageRequests.insurerId))
+    .innerJoin(patients, eq(patients.id, coverageRequests.patientId))
+    .innerJoin(affiliations, eq(affiliations.id, coverageRequests.affiliationId))
+    .innerJoin(icd10Codes, eq(icd10Codes.code, coverageRequests.diagnosisCode))
+    .innerJoin(users, eq(users.id, coverageRequests.createdBy))
+    .where(and(eq(coverageRequests.id, id), reachableBy(side)));
+  if (!row) throw notFound('Demande de prise en charge');
+
+  const items = await db
+    .select({
+      actCode: coverageRequestItems.actCode,
+      actLabel: coverageRequestItems.actLabel,
+      quantity: coverageRequestItems.quantity,
+      unitPrice: coverageRequestItems.unitPrice,
+      lineAmount: coverageRequestItems.lineAmount,
+    })
+    .from(coverageRequestItems)
+    .where(eq(coverageRequestItems.coverageRequestId, id))
+    .orderBy(coverageRequestItems.position);
+  const events = await db
+    .select({
+      fromStatus: coverageRequestEvents.fromStatus,
+      toStatus: coverageRequestEvents.toStatus,
+      actorName: users.fullName,
+      reason: coverageRequestEvents.reason,
+      createdAt: coverageRequestEvents.createdAt,
+    })
+    .from(coverageRequestEvents)
+    .leftJoin(users, eq(users.id, coverageRequestEvents.actorUserId))
+    .where(eq(coverageRequestEvents.coverageRequestId, id))
+    .orderBy(coverageRequestEvents.createdAt);
+
+  const { request } = row;
+  return {
+    id: request.id,
+    status: request.status,
+    center: row.center,
+    insurer: row.insurer,
+    patient: row.patient,
+    affiliation: row.affiliation,
+    diagnosis: row.diagnosis,
+    items,
+    estimatedAmount: request.estimatedAmount,
+    grantedAmount: request.grantedAmount,
+    patientShare: request.patientShare,
+    validUntil: request.validUntil,
+    createdBy: row.createdBy,
+    createdAt: iso(request.createdAt),
+    updatedAt: iso(request.updatedAt),
+    events: events.map(({ actorName, createdAt, ...event }) => ({
+      ...event,
+      actor: actorName === null ? null : { fullName: actorName },
+      createdAt: iso(createdAt),
+    })),
+  };
+}
+
+export const COVERAGE_REQUEST_PAGE_SIZE = 50;
+
+/** A page of requests, without diagnosis nor lines: who, which status, which amounts. */
+export function listCoverageRequests(
+  db: Db | Tx,
+  side: Side,
+  filter: { status?: CoverageRequestStatus; patientId?: string; offset: number },
+) {
+  return db
+    .select({
+      id: coverageRequests.id,
+      status: coverageRequests.status,
+      patient: { lastName: patients.lastName, firstNames: patients.firstNames },
+      center: { name: center.name },
+      insurer: { name: insurer.name },
+      estimatedAmount: coverageRequests.estimatedAmount,
+      grantedAmount: coverageRequests.grantedAmount,
+      validUntil: coverageRequests.validUntil,
+      updatedAt: coverageRequests.updatedAt,
+    })
+    .from(coverageRequests)
+    .innerJoin(center, eq(center.id, coverageRequests.centerId))
+    .innerJoin(insurer, eq(insurer.id, coverageRequests.insurerId))
+    .innerJoin(patients, eq(patients.id, coverageRequests.patientId))
+    .where(
+      and(
+        reachableBy(side),
+        filter.status ? eq(coverageRequests.status, filter.status) : undefined,
+        filter.patientId ? eq(coverageRequests.patientId, filter.patientId) : undefined,
+      ),
+    )
+    .orderBy(desc(coverageRequests.updatedAt), coverageRequests.id)
+    .limit(COVERAGE_REQUEST_PAGE_SIZE)
+    .offset(filter.offset);
 }

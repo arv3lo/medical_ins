@@ -1,4 +1,5 @@
 import {
+  coverageRequestStatusSchema,
   createCoverageRequestInputSchema,
   hasPermission,
   transitionInputSchema,
@@ -12,7 +13,9 @@ import { forbidden } from '../../lib/errors.js';
 import { requirePermission, requireUser, rolesIn } from '../../plugins/auth.js';
 import { requireHealthCenter } from '../patients/service.js';
 import {
+  findCoverageRequest,
   insertCoverageRequest,
+  listCoverageRequests,
   lockCoverageRequest,
   searchMedicalActs,
   updateCoverageRequest,
@@ -23,6 +26,12 @@ const orgParams = z.object({ orgId: z.string().uuid() });
 const requestParams = orgParams.extend({ id: z.string().uuid() });
 
 const BASE = '/api/organizations/:orgId/coverage-requests';
+
+const listQuery = z.object({
+  status: coverageRequestStatusSchema.optional(),
+  patientId: z.string().uuid().optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 /**
  * Which side the caller acts for in `orgId`: the requesting center (coverage_request.create) or
@@ -45,6 +54,43 @@ export function coverageRequestRoutes(app: FastifyInstance, { db }: { db: Db }):
     requireUser(request);
     const { q } = z.object({ q: z.string().max(100).optional() }).parse(request.query);
     return searchMedicalActs(db, q);
+  });
+
+  // A request carries a diagnosis: every read is a read of medical content, audited as such in
+  // the same transaction as the read itself (FR-013), like consultations.
+  app.get(BASE, async (request) => {
+    const { orgId } = orgParams.parse(request.params);
+    const { user, actor } = sideIn(request, orgId);
+    const filter = listQuery.parse(request.query);
+    return db.transaction(async (tx) => {
+      const list = await listCoverageRequests(tx, { actor, organizationId: orgId }, filter);
+      await audit(tx, {
+        actorUserId: user.id,
+        organizationId: orgId,
+        action: 'medical_record.read',
+        entityType: 'coverage_request',
+        after: { coverageRequestIds: list.map((r) => r.id) },
+        ip: request.ip,
+      });
+      return list;
+    });
+  });
+
+  app.get(`${BASE}/:id`, async (request) => {
+    const { orgId, id } = requestParams.parse(request.params);
+    const { user, actor } = sideIn(request, orgId);
+    return db.transaction(async (tx) => {
+      const view = await findCoverageRequest(tx, id, { actor, organizationId: orgId });
+      await audit(tx, {
+        actorUserId: user.id,
+        organizationId: orgId,
+        action: 'medical_record.read',
+        entityType: 'coverage_request',
+        entityId: id,
+        ip: request.ip,
+      });
+      return view;
+    });
   });
 
   app.post(BASE, async (request, reply) => {

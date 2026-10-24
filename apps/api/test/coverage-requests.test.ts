@@ -1,6 +1,13 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { affiliations, coverageRequestItems, patients, users } from '../src/db/schema.js';
+import {
+  affiliations,
+  coverageRequestItems,
+  coverageRequests,
+  memberships,
+  patients,
+  users,
+} from '../src/db/schema.js';
 import { type CoverageFixture, coverageFixture } from './coverage-fixtures.js';
 import { TEST_DATABASE_URL, createUser, login, setupTestApp } from './helpers.js';
 
@@ -214,6 +221,159 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: drafts and submission', 
           .set({ status: 'validated', startsOn: '2000-01-01', endsOn: null })
           .where(eq(affiliations.id, f.affiliationId));
       }
+    });
+  });
+
+  describe('reading', () => {
+    const KEYS = [
+      'affiliation',
+      'center',
+      'createdAt',
+      'createdBy',
+      'diagnosis',
+      'estimatedAmount',
+      'events',
+      'grantedAmount',
+      'id',
+      'insurer',
+      'items',
+      'patient',
+      'patientShare',
+      'status',
+      'updatedAt',
+      'validUntil',
+    ];
+    const read = (id: string, cookie: string, organizationId = f.center) =>
+      f.inject('GET', `${f.base(organizationId)}/${id}`, cookie);
+    const reads = () => f.audits('medical_record.read');
+
+    it('shows the center what the contract lists, and audits the read', async () => {
+      const id = await f.submitted();
+      const response = await read(id, f.doctor);
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(Object.keys(body).sort()).toEqual(KEYS);
+      expect(body).toMatchObject({
+        id,
+        status: 'submitted',
+        center: { id: f.center, name: 'CSB A' },
+        insurer: { id: f.insurer, name: 'OSTIE' },
+        patient: {
+          id: f.patientId,
+          lastName: 'Rakoto',
+          firstNames: 'Jean',
+          birthDate: '1985-03-12',
+        },
+        affiliation: { id: f.affiliationId, memberNumber: 'OS-123456', status: 'validated' },
+        diagnosis: { code: 'B54', label: 'Paludisme, sans précision' },
+        items: [
+          { actCode: 'CONS-GEN', quantity: 2, unitPrice: 15000, lineAmount: 30000 },
+          { actCode: 'ECG', quantity: 1, unitPrice: 40000, lineAmount: 40000 },
+        ],
+        estimatedAmount: 70000,
+        grantedAmount: null,
+        createdBy: { fullName: expect.stringMatching(/^doctor\./) },
+        events: [
+          { fromStatus: null, toStatus: 'draft', reason: null },
+          { fromStatus: 'draft', toStatus: 'submitted' },
+        ],
+      });
+      expect(await reads()).toMatchObject([
+        { entityType: 'coverage_request', entityId: id, organizationId: f.center },
+      ]);
+    });
+
+    it('shows the insurer the same request and nothing else, never a draft', async () => {
+      const id = await f.submitted();
+      const response = await read(id, f.advisor, f.insurer);
+      expect(response.statusCode).toBe(200);
+      expect(Object.keys(response.json()).sort()).toEqual(KEYS);
+      expect(response.json().center).toEqual({ id: f.center, name: 'CSB A' });
+      expect((await read(await f.draft(), f.advisor, f.insurer)).statusCode).toBe(404);
+    });
+
+    it('finds nothing from another center or insurer', async () => {
+      const id = await f.submitted();
+      const otherDoctor = await f.as('doctor', f.otherCenter);
+      expect((await read(id, otherDoctor, f.otherCenter)).statusCode).toBe(404);
+      expect((await read(id, f.otherAdvisor, f.otherInsurer)).statusCode).toBe(404);
+    });
+
+    it('keeps the request readable by the center when its author leaves', async () => {
+      const id = await f.draft();
+      const author = (await f.row(id)).createdBy;
+      await ctx.db
+        .delete(memberships)
+        .where(and(eq(memberships.userId, author), eq(memberships.organizationId, f.center)));
+      const { cookie } = await f.colleague('doctor', f.center);
+      expect((await read(id, cookie)).statusCode).toBe(200);
+    });
+
+    it('refuses the roles without a coverage permission, and the super admin alone', async () => {
+      const id = await f.submitted();
+      await createUser(ctx.db, {
+        email: 'root@example.mg',
+        password: 'pass-12345',
+        isSuperAdmin: true,
+      });
+      const root = (await login(ctx.app, 'root@example.mg', 'pass-12345')).cookie;
+      const nurse = await f.as('nurse', f.center);
+      const billing = await f.as('billing', f.center);
+      for (const cookie of [f.reception, nurse, billing, root]) {
+        expect((await read(id, cookie)).statusCode).toBe(403);
+      }
+      expect(await reads()).toEqual([]);
+    });
+
+    describe('the list', () => {
+      const list = (cookie: string, organizationId = f.center, query = '') =>
+        f.inject('GET', `${f.base(organizationId)}?${query}`, cookie);
+
+      it('shows the center all its requests and the insurer all but drafts, audited', async () => {
+        const draftId = await f.draft();
+        const submittedId = await f.submitted();
+        const center = await list(f.doctor);
+        expect(
+          center
+            .json()
+            .map((r: { id: string }) => r.id)
+            .sort(),
+        ).toEqual([draftId, submittedId].sort());
+        expect(center.json()[0]).not.toHaveProperty('diagnosis');
+        expect(center.json()[0]).not.toHaveProperty('items');
+        const insurer = await list(f.advisor, f.insurer);
+        expect(insurer.json()).toMatchObject([
+          {
+            id: submittedId,
+            status: 'submitted',
+            patient: { lastName: 'Rakoto' },
+            center: { name: 'CSB A' },
+          },
+        ]);
+        expect(await reads()).toMatchObject([
+          { entityType: 'coverage_request', after: { coverageRequestIds: expect.any(Array) } },
+          { entityType: 'coverage_request', after: { coverageRequestIds: [submittedId] } },
+        ]);
+      });
+
+      it('filters by status and patient, and pages by 50', async () => {
+        const submittedId = await f.submitted();
+        await f.draft();
+        expect((await list(f.doctor, f.center, 'status=submitted')).json()).toMatchObject([
+          { id: submittedId },
+        ]);
+        const [stranger] = await ctx.db
+          .insert(patients)
+          .values({ lastName: 'Rabe', firstNames: 'Paul', birthDate: '1990-01-01', sex: 'male' })
+          .returning();
+        expect((await list(f.doctor, f.center, `patientId=${stranger!.id}`)).json()).toEqual([]);
+
+        const template = await f.row(submittedId);
+        const { id: _, ...values } = template;
+        await ctx.db.insert(coverageRequests).values(Array.from({ length: 50 }, () => values));
+        expect((await list(f.doctor)).json()).toHaveLength(50);
+        expect((await list(f.doctor, f.center, 'offset=50')).json()).toHaveLength(2);
+      });
     });
   });
 
