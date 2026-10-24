@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
-import type { Db } from '../db/client.js';
+import type { Db, Tx } from '../db/client.js';
 import { sessions } from '../db/schema.js';
 
 export const SESSION_COOKIE = 'sid';
@@ -8,7 +8,7 @@ export const SESSION_COOKIE = 'sid';
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export async function createSession(
-  db: Db,
+  db: Db | Tx,
   userId: string,
   ttlHours: number,
   meta: { ip?: string; userAgent?: string },
@@ -32,6 +32,6 @@ export async function findSessionUserId(db: Db, token: string): Promise<string |
   return session?.userId ?? null;
 }
 
-export async function deleteSession(db: Db, token: string): Promise<void> {
+export async function deleteSession(db: Db | Tx, token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.id, hashToken(token)));
 }

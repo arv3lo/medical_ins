@@ -33,16 +33,19 @@ export function authRoutes(app: FastifyInstance, { db, env }: { db: Db; env: Env
         throw new HttpError(401, 'Email ou mot de passe incorrect');
       }
 
-      const session = await createSession(db, user.id, env.SESSION_TTL_HOURS, {
-        ip: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-      await audit(db, {
-        actorUserId: user.id,
-        action: 'auth.login',
-        entityType: 'user',
-        entityId: user.id,
-        ip: request.ip,
+      const session = await db.transaction(async (tx) => {
+        const created = await createSession(tx, user.id, env.SESSION_TTL_HOURS, {
+          ip: request.ip,
+          userAgent: request.headers['user-agent'],
+        });
+        await audit(tx, {
+          actorUserId: user.id,
+          action: 'auth.login',
+          entityType: 'user',
+          entityId: user.id,
+          ip: request.ip,
+        });
+        return created;
       });
 
       reply.setCookie(SESSION_COOKIE, session.token, {
@@ -58,16 +61,19 @@ export function authRoutes(app: FastifyInstance, { db, env }: { db: Db; env: Env
 
   app.post('/api/auth/logout', async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE];
-    if (token) await deleteSession(db, token);
-    if (request.user) {
-      await audit(db, {
-        actorUserId: request.user.id,
-        action: 'auth.logout',
-        entityType: 'user',
-        entityId: request.user.id,
-        ip: request.ip,
-      });
-    }
+    const user = request.user;
+    await db.transaction(async (tx) => {
+      if (token) await deleteSession(tx, token);
+      if (user) {
+        await audit(tx, {
+          actorUserId: user.id,
+          action: 'auth.logout',
+          entityType: 'user',
+          entityId: user.id,
+          ip: request.ip,
+        });
+      }
+    });
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.status(204).send();
   });

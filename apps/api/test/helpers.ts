@@ -35,6 +35,22 @@ export async function resetDb(db: Db): Promise<void> {
   );
 }
 
+/** Runs `fn` while every audit_logs insert fails, as if the audit write broke mid-request. */
+export async function withAuditFailing<T>(db: Db, fn: () => Promise<T>): Promise<T> {
+  await db.execute(sql`
+    CREATE FUNCTION test_fail_audit() RETURNS trigger AS $$
+    BEGIN RAISE EXCEPTION 'audit write failed'; END;
+    $$ LANGUAGE plpgsql`);
+  await db.execute(sql`
+    CREATE TRIGGER test_fail_audit BEFORE INSERT ON audit_logs
+    FOR EACH ROW EXECUTE FUNCTION test_fail_audit()`);
+  try {
+    return await fn();
+  } finally {
+    await db.execute(sql`DROP FUNCTION test_fail_audit() CASCADE`);
+  }
+}
+
 export async function createUser(
   db: Db,
   values: { email: string; password: string; isSuperAdmin?: boolean },

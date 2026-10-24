@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { TEST_DATABASE_URL, createUser, login, resetDb, setupTestApp } from './helpers.js';
+import { memberships, organizations } from '../src/db/schema.js';
+import {
+  TEST_DATABASE_URL,
+  createUser,
+  login,
+  resetDb,
+  setupTestApp,
+  withAuditFailing,
+} from './helpers.js';
 
 describe.skipIf(!TEST_DATABASE_URL)('organizations', () => {
   let ctx: Awaited<ReturnType<typeof setupTestApp>>;
@@ -87,6 +95,29 @@ describe.skipIf(!TEST_DATABASE_URL)('organizations', () => {
       headers: { cookie: doctor.cookie },
     });
     expect(mine.json()).toHaveLength(1);
+  });
+
+  it('does not create an organization whose audit entry cannot be written', async () => {
+    const response = await withAuditFailing(ctx.db, () =>
+      ctx.app.inject({
+        method: 'POST',
+        url: '/api/organizations',
+        headers: { cookie: adminCookie },
+        payload: { type: 'insurer', name: 'OSTIE' },
+      }),
+    );
+    expect(response.statusCode).toBe(500);
+    expect(await ctx.db.select().from(organizations)).toHaveLength(0);
+  });
+
+  it('does not add a member whose audit entry cannot be written', async () => {
+    const center = await createCenter();
+    await createUser(ctx.db, { email: 'doc@example.mg', password: 'doc-pass-123' });
+    const response = await withAuditFailing(ctx.db, () =>
+      addMember(center.id, adminCookie, { email: 'doc@example.mg', role: 'doctor' }),
+    );
+    expect(response.statusCode).toBe(500);
+    expect(await ctx.db.select().from(memberships)).toHaveLength(0);
   });
 
   it('refuses an insurer role inside a health center', async () => {

@@ -37,15 +37,18 @@ export function organizationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
   app.post('/api/organizations', async (request, reply) => {
     const user = requireSuperAdmin(request);
     const input = createOrganizationInputSchema.parse(request.body);
-    const [organization] = await db.insert(organizations).values(input).returning();
-    await audit(db, {
-      actorUserId: user.id,
-      organizationId: organization!.id,
-      action: 'organization.create',
-      entityType: 'organization',
-      entityId: organization!.id,
-      after: organization,
-      ip: request.ip,
+    const organization = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(organizations).values(input).returning();
+      await audit(tx, {
+        actorUserId: user.id,
+        organizationId: created!.id,
+        action: 'organization.create',
+        entityType: 'organization',
+        entityId: created!.id,
+        after: created,
+        ip: request.ip,
+      });
+      return created;
     });
     return reply.status(201).send(organization);
   });
@@ -104,17 +107,16 @@ export function organizationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
         .onConflictDoNothing()
         .returning();
       if (!created) throw new HttpError(409, 'Cet utilisateur a déjà ce rôle');
+      await audit(tx, {
+        actorUserId: actor.id,
+        organizationId: id,
+        action: 'membership.create',
+        entityType: 'membership',
+        entityId: created.id,
+        after: created,
+        ip: request.ip,
+      });
       return created;
-    });
-
-    await audit(db, {
-      actorUserId: actor.id,
-      organizationId: id,
-      action: 'membership.create',
-      entityType: 'membership',
-      entityId: membership.id,
-      after: membership,
-      ip: request.ip,
     });
     return reply.status(201).send(membership);
   });

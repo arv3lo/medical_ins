@@ -1,4 +1,4 @@
-import type { Db } from '../db/client.js';
+import type { Db, Tx } from '../db/client.js';
 import { auditLogs } from '../db/schema.js';
 
 export type AuditEntry = {
@@ -12,7 +12,8 @@ export type AuditEntry = {
   ip?: string | null;
 };
 
-export async function audit(db: Db, entry: AuditEntry): Promise<void> {
+/** Pass the transaction of the audited change, so the change and its entry commit together. */
+export async function audit(db: Db | Tx, entry: AuditEntry): Promise<void> {
   await db.insert(auditLogs).values({
     actorUserId: entry.actorUserId,
     organizationId: entry.organizationId ?? null,
