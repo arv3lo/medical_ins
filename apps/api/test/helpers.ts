@@ -71,11 +71,18 @@ export async function createUser(
   return user!;
 }
 
-/** Logs in and returns the Cookie header to send with later requests. */
+let loginCount = 0;
+
+/**
+ * Logs in and returns the Cookie header to send with later requests. Each call comes from its
+ * own address, so a test file never reaches the per-IP login rate limit.
+ */
 export async function login(app: FastifyInstance, email: string, password: string) {
+  loginCount += 1;
   const response = await app.inject({
     method: 'POST',
     url: '/api/auth/login',
+    remoteAddress: `10.0.${Math.floor(loginCount / 256)}.${loginCount % 256}`,
     payload: { email, password },
   });
   if (response.statusCode !== 200) throw new Error(`login failed: ${response.body}`);
