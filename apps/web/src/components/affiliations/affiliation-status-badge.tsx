@@ -5,6 +5,7 @@ const VARIANTS = {
   pending: 'outline',
   validated: 'secondary',
   rejected: 'destructive',
+  withdrawn: 'ghost',
 } as const satisfies Record<AffiliationStatus, string>;
 
 export function AffiliationStatusBadge({ status }: { status: AffiliationStatus }) {

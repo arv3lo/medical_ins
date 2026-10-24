@@ -1,7 +1,7 @@
-import type { Role } from '@medical-ins/shared';
-import { eq } from 'drizzle-orm';
+import { INSURED_PAGE_SIZE, type Role } from '@medical-ins/shared';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, organizations } from '../src/db/schema.js';
+import { affiliations, auditLogs, organizations } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helpers.js';
 
 describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
@@ -57,6 +57,59 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       },
     });
 
+  const createPatient = async (lastName: string) => {
+    const created = await ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${center}/patients`,
+      headers: { cookie: reception },
+      payload: { lastName, firstNames: 'Marie', birthDate: '1990-01-01', sex: 'female' },
+    });
+    return created.json<{ id: string }>().id;
+  };
+
+  /** Declares OSTIE's holder number OS-123456 for `forPatient`, from the first center. */
+  const declareHolder = (forPatient: string, payload: Record<string, unknown> = {}) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${center}/patients/${forPatient}/affiliations`,
+      headers: { cookie: reception },
+      payload: {
+        insurerId: ostie,
+        memberNumber: 'OS-123456',
+        holderStatus: 'holder',
+        startsOn: '2026-01-01',
+        ...payload,
+      },
+    });
+
+  const decideAs = async (affiliationId: string, decision: 'validate' | 'reject') =>
+    inject(
+      'POST',
+      `/api/organizations/${ostie}/affiliations/${affiliationId}/${decision}`,
+      await as('insurer_manager', ostie),
+      decision === 'reject' ? { reason: 'Numéro inconnu' } : undefined,
+    );
+
+  const withdraw = (cookie: string, affiliationId: string, orgId = center) =>
+    inject(
+      'POST',
+      `/api/organizations/${orgId}/patients/${patientId}/affiliations/${affiliationId}/withdraw`,
+      cookie,
+    );
+
+  /** Waits until `count` other sessions are blocked on a lock held by the test. */
+  const waitForLockWaiters = async (count: number) => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const [row] = await ctx.db.execute<{ waiting: number }>(
+        sql`SELECT count(*)::int AS waiting FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+      );
+      if (row!.waiting >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`${count} sessions never waited on the lock`);
+  };
+
   const inject = (method: 'GET' | 'POST', url: string, cookie: string, payload?: object) =>
     ctx.app.inject({ method, url, headers: { cookie }, payload });
 
@@ -84,8 +137,22 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     );
   });
 
+  it("hides a patient's affiliations from a center the patient is not linked to", async () => {
+    await declare(reception);
+    const list = await inject(
+      'GET',
+      `/api/organizations/${otherCenter}/patients/${patientId}/affiliations`,
+      await as('reception', otherCenter),
+    );
+    expect(list.statusCode).toBe(404);
+  });
+
   it('refuses an insurer id that is not an insurer', async () => {
     expect((await declare(reception, { insurerId: otherCenter })).statusCode).toBe(404);
+  });
+
+  it('answers 400, not 500, for a start date that does not exist', async () => {
+    expect((await declare(reception, { startsOn: '2023-02-30' })).statusCode).toBe(400);
   });
 
   it('keeps a member number unique among the holders of one insurer', async () => {
@@ -116,6 +183,55 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     expect(elsewhere.statusCode).toBe(201);
   });
 
+  it('frees a holder number once the insurer rejects the declaration', async () => {
+    const wrong = (await declareHolder(patientId)).json<{ id: string }>();
+    expect((await decideAs(wrong.id, 'reject')).statusCode).toBe(200);
+
+    // The real holder can now be declared, and so can a corrected declaration.
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(201);
+    expect((await declareHolder(patientId, { memberNumber: 'OS-654321' })).statusCode).toBe(201);
+  });
+
+  it('lets the same holder declare a new period, but no other patient', async () => {
+    const ended = (
+      await declareHolder(patientId, { startsOn: '2025-01-01', endsOn: '2025-12-31' })
+    ).json<{ id: string }>();
+    expect((await decideAs(ended.id, 'validate')).statusCode).toBe(200);
+
+    expect((await declareHolder(patientId, { startsOn: '2026-01-01' })).statusCode).toBe(201);
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(409);
+  });
+
+  it('lets the declaring center withdraw a pending declaration, audited', async () => {
+    const affiliation = (await declareHolder(patientId)).json<{ id: string }>();
+
+    expect((await withdraw(await as('doctor', center), affiliation.id)).statusCode).toBe(403);
+    const otherReception = await as('reception', otherCenter);
+    expect((await withdraw(otherReception, affiliation.id, otherCenter)).statusCode).toBe(404);
+
+    const withdrawn = await withdraw(reception, affiliation.id);
+    expect(withdrawn.statusCode).toBe(200);
+    expect(withdrawn.json()).toMatchObject({ status: 'withdrawn' });
+    // Withdrawn is final, and the insurer can no longer decide it.
+    expect((await withdraw(reception, affiliation.id)).statusCode).toBe(409);
+    expect((await decideAs(affiliation.id, 'validate')).statusCode).toBe(409);
+
+    // The number is free again.
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(201);
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'affiliation.withdraw'));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ organizationId: center, entityId: affiliation.id });
+  });
+
+  it('cannot withdraw a declaration the insurer has decided', async () => {
+    const affiliation = (await declareHolder(patientId)).json<{ id: string }>();
+    await decideAs(affiliation.id, 'validate');
+    expect((await withdraw(reception, affiliation.id)).statusCode).toBe(409);
+  });
+
   it('shows each insurer only its own affiliations, with identity but nothing medical', async () => {
     await declare(reception);
     await declare(reception, { insurerId: bsa, memberNumber: 'B-1' });
@@ -132,12 +248,54 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       memberNumber: 'OS-123456',
       patient: { lastName: 'Rakoto', birthDate: '1985-03-12' },
     });
+    // Only what a decision needs: not the declaring center, nor internal ids and timestamps.
+    expect(Object.keys(rows[0]!).sort()).toEqual([
+      'employer',
+      'endsOn',
+      'holderStatus',
+      'id',
+      'memberNumber',
+      'patient',
+      'planName',
+      'rejectionReason',
+      'startsOn',
+      'status',
+    ]);
     expect(Object.keys(rows[0]!.patient as object).sort()).toEqual([
       'birthDate',
       'firstNames',
       'lastName',
       'nationalId',
     ]);
+  });
+
+  it('pages the insurer list and filters it by member number', async () => {
+    await ctx.db.insert(affiliations).values(
+      Array.from({ length: INSURED_PAGE_SIZE + 1 }, (_, i) => ({
+        patientId,
+        insurerId: ostie,
+        memberNumber: `N-${String(i).padStart(3, '0')}`,
+        holderStatus: 'holder' as const,
+        startsOn: '2026-01-01',
+        declaredByOrganizationId: center,
+      })),
+    );
+    const manager = await as('insurer_manager', ostie);
+    const list = (query: string) =>
+      inject('GET', `/api/organizations/${ostie}/affiliations?status=pending&${query}`, manager);
+
+    const first = (await list('')).json<{ memberNumber: string }[]>();
+    expect(first).toHaveLength(INSURED_PAGE_SIZE);
+    const next = (await list(`offset=${INSURED_PAGE_SIZE}`)).json<{ memberNumber: string }[]>();
+    expect(next).toHaveLength(1);
+    expect(first.map((a) => a.memberNumber)).not.toContain(next[0]!.memberNumber);
+
+    // A prefix, whatever the case; LIKE wildcards match literally.
+    const found = (await list('memberNumber=n-01')).json<{ memberNumber: string }[]>();
+    expect(found.map((a) => a.memberNumber).sort()).toEqual(
+      Array.from({ length: 10 }, (_, i) => `N-01${i}`),
+    );
+    expect((await list('memberNumber=N-%25')).json()).toEqual([]);
   });
 
   it('lets only the insurer manager validate or reject, audited', async () => {
@@ -171,6 +329,43 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     expect(entries[0]!.organizationId).toBe(ostie);
   });
 
+  it('checks access before validating the reject body', async () => {
+    const affiliation = (await declare(reception)).json<{ id: string }>();
+    const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}/reject`;
+
+    const anonymous = await ctx.app.inject({ method: 'POST', url, payload: {} });
+    expect(anonymous.statusCode).toBe(401);
+    expect((await inject('POST', url, await as('medical_advisor', ostie), {})).statusCode).toBe(
+      403,
+    );
+  });
+
+  it('lets only the first of two concurrent decisions through', async () => {
+    const affiliation = (await declare(reception)).json<{ id: string }>();
+    const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}`;
+    const manager = await as('insurer_manager', ostie);
+
+    // Hold the row so that both requests have read it as pending before either one writes.
+    const decisions = await ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM affiliations WHERE id = ${affiliation.id} FOR UPDATE`);
+      const both = Promise.all([
+        inject('POST', `${url}/validate`, manager),
+        inject('POST', `${url}/reject`, manager, { reason: 'Numéro inconnu' }),
+      ]);
+      await waitForLockWaiters(2);
+      // Not awaited here: the requests can only finish once this transaction releases the row.
+      return { both };
+    });
+    const [validated, rejected] = await decisions.both;
+
+    expect([validated.statusCode, rejected.statusCode].sort()).toEqual([200, 409]);
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.entityId, affiliation.id));
+    expect(entries.map((d) => d.action).filter((a) => a !== 'affiliation.create')).toHaveLength(1);
+  });
+
   it('requires a reason to reject', async () => {
     const affiliation = (await declare(reception)).json<{ id: string }>();
     const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}/reject`;
@@ -192,6 +387,23 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       reception,
     );
     expect(search.json()).toMatchObject([{ lastName: 'Rakoto' }]);
+  });
+
+  it("does not find another center's patient by member number", async () => {
+    await declare(reception);
+    const search = await inject(
+      'GET',
+      `/api/organizations/${otherCenter}/patients?q=OS-1234`,
+      await as('reception', otherCenter),
+    );
+    expect(search.statusCode).toBe(200);
+    expect(search.json()).toEqual([]);
+  });
+
+  it('accepts the same dependent declared twice, as for the periods of a holder', async () => {
+    const dependent = { holderStatus: 'dependent', startsOn: '2025-01-01', endsOn: '2025-12-31' };
+    expect((await declare(reception, dependent)).statusCode).toBe(201);
+    expect((await declare(reception, { ...dependent, endsOn: undefined })).statusCode).toBe(201);
   });
 
   it('lists the insurers any signed-in user can choose from', async () => {

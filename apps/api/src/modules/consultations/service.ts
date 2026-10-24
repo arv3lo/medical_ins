@@ -140,14 +140,23 @@ export async function findConsultation(
   };
 }
 
-/** The author's own draft, written in `organizationId`: the only consultation one may change. */
+/**
+ * The author's own draft, written in `organizationId`: the only consultation one may change.
+ * Its row stays locked until `tx` ends, so a concurrent edit or signature waits for this one and
+ * then sees the consultation as signed, instead of changing it after the check.
+ */
 export async function requireOwnDraft(
-  db: Db | Tx,
+  tx: Tx,
   organizationId: string,
   id: string,
   authorId: string,
 ): Promise<Consultation> {
-  const consultation = await findConsultation(db, id, authorId);
+  await tx
+    .select({ id: consultations.id })
+    .from(consultations)
+    .where(eq(consultations.id, id))
+    .for('update');
+  const consultation = await findConsultation(tx, id, authorId);
   if (consultation.organizationId !== organizationId || consultation.doctorId !== authorId) {
     throw notFound('Consultation');
   }
@@ -191,9 +200,12 @@ export async function updateDraft(tx: Tx, id: string, input: UpdateConsultationI
   }
 }
 
-export async function markSigned(tx: Tx, id: string) {
-  await tx
+/** Signs the draft and returns when it was signed. */
+export async function markSigned(tx: Tx, id: string): Promise<Date> {
+  const [row] = await tx
     .update(consultations)
     .set({ signedAt: sql`now()` })
-    .where(eq(consultations.id, id));
+    .where(eq(consultations.id, id))
+    .returning({ signedAt: consultations.signedAt });
+  return row!.signedAt!;
 }

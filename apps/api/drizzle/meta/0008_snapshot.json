@@ -1,6 +1,6 @@
 {
-  "id": "ff0c4d54-6961-4c9c-8d44-d669d8fc4fdd",
-  "prevId": "efd8b302-a45b-48d0-8588-ec888ca41187",
+  "id": "7d9ae481-cddf-414a-ac8d-e5215a4d79ea",
+  "prevId": "d113ce61-6ee8-4ef6-b2eb-42a3ca1a89e6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -100,28 +100,6 @@
         }
       },
       "indexes": {
-        "affiliations_holder_member_number_unique": {
-          "name": "affiliations_holder_member_number_unique",
-          "columns": [
-            {
-              "expression": "insurer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "member_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"affiliations\".\"holder_status\" = 'holder'",
-          "concurrently": false
-        },
         "affiliations_patient_id_index": {
           "name": "affiliations_patient_id_index",
           "columns": [
@@ -133,9 +111,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "affiliations_insurer_id_status_index": {
           "name": "affiliations_insurer_id_status_index",
@@ -154,50 +132,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "affiliations_patient_id_patients_id_fk": {
           "name": "affiliations_patient_id_patients_id_fk",
           "tableFrom": "affiliations",
+          "tableTo": "patients",
           "columnsFrom": [
             "patient_id"
           ],
-          "tableTo": "patients",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "affiliations_insurer_id_organizations_id_fk": {
           "name": "affiliations_insurer_id_organizations_id_fk",
           "tableFrom": "affiliations",
+          "tableTo": "organizations",
           "columnsFrom": [
             "insurer_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "affiliations_declared_by_organization_id_organizations_id_fk": {
           "name": "affiliations_declared_by_organization_id_organizations_id_fk",
           "tableFrom": "affiliations",
+          "tableTo": "organizations",
           "columnsFrom": [
             "declared_by_organization_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -305,9 +283,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "appointments_patient_id_index": {
           "name": "appointments_patient_id_index",
@@ -320,50 +298,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "appointments_organization_id_organizations_id_fk": {
           "name": "appointments_organization_id_organizations_id_fk",
           "tableFrom": "appointments",
+          "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "appointments_patient_id_patients_id_fk": {
           "name": "appointments_patient_id_patients_id_fk",
           "tableFrom": "appointments",
+          "tableTo": "patients",
           "columnsFrom": [
             "patient_id"
           ],
-          "tableTo": "patients",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "appointments_doctor_id_users_id_fk": {
           "name": "appointments_doctor_id_users_id_fk",
           "tableFrom": "appointments",
+          "tableTo": "users",
           "columnsFrom": [
             "doctor_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -461,9 +439,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "audit_logs_organization_id_at_index": {
           "name": "audit_logs_organization_id_at_index",
@@ -482,422 +460,39 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "audit_logs_actor_user_id_users_id_fk": {
           "name": "audit_logs_actor_user_id_users_id_fk",
           "tableFrom": "audit_logs",
+          "tableTo": "users",
           "columnsFrom": [
             "actor_user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "audit_logs_organization_id_organizations_id_fk": {
           "name": "audit_logs_organization_id_organizations_id_fk",
           "tableFrom": "audit_logs",
+          "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.consultation_addenda": {
-      "name": "consultation_addenda",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "consultation_id": {
-          "name": "consultation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_id": {
-          "name": "author_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "consultation_addenda_consultation_id_index": {
-          "name": "consultation_addenda_consultation_id_index",
-          "columns": [
-            {
-              "expression": "consultation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "consultation_addenda_consultation_id_consultations_id_fk": {
-          "name": "consultation_addenda_consultation_id_consultations_id_fk",
-          "tableFrom": "consultation_addenda",
-          "columnsFrom": [
-            "consultation_id"
-          ],
-          "tableTo": "consultations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "consultation_addenda_author_id_users_id_fk": {
-          "name": "consultation_addenda_author_id_users_id_fk",
-          "tableFrom": "consultation_addenda",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.consultations": {
-      "name": "consultations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "patient_id": {
-          "name": "patient_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "doctor_id": {
-          "name": "doctor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "appointment_id": {
-          "name": "appointment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "examination": {
-          "name": "examination",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vitals": {
-          "name": "vitals",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "signed_at": {
-          "name": "signed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "consultations_patient_id_index": {
-          "name": "consultations_patient_id_index",
-          "columns": [
-            {
-              "expression": "patient_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "consultations_organization_id_index": {
-          "name": "consultations_organization_id_index",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "consultations_organization_id_organizations_id_fk": {
-          "name": "consultations_organization_id_organizations_id_fk",
-          "tableFrom": "consultations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "tableTo": "organizations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "consultations_patient_id_patients_id_fk": {
-          "name": "consultations_patient_id_patients_id_fk",
-          "tableFrom": "consultations",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "tableTo": "patients",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "consultations_doctor_id_users_id_fk": {
-          "name": "consultations_doctor_id_users_id_fk",
-          "tableFrom": "consultations",
-          "columnsFrom": [
-            "doctor_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "consultations_appointment_id_appointments_id_fk": {
-          "name": "consultations_appointment_id_appointments_id_fk",
-          "tableFrom": "consultations",
-          "columnsFrom": [
-            "appointment_id"
-          ],
-          "tableTo": "appointments",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "consultations_appointment_id_unique": {
-          "name": "consultations_appointment_id_unique",
-          "columns": [
-            "appointment_id"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.diagnoses": {
-      "name": "diagnoses",
-      "schema": "",
-      "columns": {
-        "consultation_id": {
-          "name": "consultation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "is_primary": {
-          "name": "is_primary",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "diagnoses_one_primary": {
-          "name": "diagnoses_one_primary",
-          "columns": [
-            {
-              "expression": "consultation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"diagnoses\".\"is_primary\"",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "diagnoses_consultation_id_consultations_id_fk": {
-          "name": "diagnoses_consultation_id_consultations_id_fk",
-          "tableFrom": "diagnoses",
-          "columnsFrom": [
-            "consultation_id"
-          ],
-          "tableTo": "consultations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "diagnoses_code_icd10_codes_code_fk": {
-          "name": "diagnoses_code_icd10_codes_code_fk",
-          "tableFrom": "diagnoses",
-          "columnsFrom": [
-            "code"
-          ],
-          "tableTo": "icd10_codes",
-          "columnsTo": [
-            "code"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "diagnoses_consultation_id_code_pk": {
-          "name": "diagnoses_consultation_id_code_pk",
-          "columns": [
-            "consultation_id",
-            "code"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.icd10_codes": {
-      "name": "icd10_codes",
-      "schema": "",
-      "columns": {
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -954,40 +549,40 @@
         "memberships_user_id_users_id_fk": {
           "name": "memberships_user_id_users_id_fk",
           "tableFrom": "memberships",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "memberships_organization_id_organizations_id_fk": {
           "name": "memberships_organization_id_organizations_id_fk",
           "tableFrom": "memberships",
+          "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "memberships_user_id_organization_id_role_unique": {
           "name": "memberships_user_id_organization_id_role_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "user_id",
             "organization_id",
             "role"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1095,37 +690,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "patient_center_links_patient_id_patients_id_fk": {
           "name": "patient_center_links_patient_id_patients_id_fk",
           "tableFrom": "patient_center_links",
+          "tableTo": "patients",
           "columnsFrom": [
             "patient_id"
           ],
-          "tableTo": "patients",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "patient_center_links_organization_id_organizations_id_fk": {
           "name": "patient_center_links_organization_id_organizations_id_fk",
           "tableFrom": "patient_center_links",
+          "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1229,18 +824,18 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"patients\".\"national_id\" IS NOT NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "patients_last_name_birth_date_idx": {
           "name": "patients_last_name_birth_date_idx",
           "columns": [
             {
               "expression": "lower(\"last_name\")",
-              "isExpression": true,
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             },
             {
@@ -1251,9 +846,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1317,24 +912,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "sessions_user_id_users_id_fk": {
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1407,10 +1002,10 @@
       "uniqueConstraints": {
         "users_email_unique": {
           "name": "users_email_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1425,7 +1020,8 @@
       "values": [
         "pending",
         "validated",
-        "rejected"
+        "rejected",
+        "withdrawn"
       ]
     },
     "public.appointment_status": {
@@ -1480,10 +1076,10 @@
     }
   },
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

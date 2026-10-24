@@ -14,6 +14,11 @@ import { ConsultButton } from '@/components/consultations/consult-button';
 import { ErrorAlert } from '@/components/error-alert';
 import { AppointmentActions } from './appointment-actions';
 import { AppointmentStatusBadge } from './appointment-status-badge';
+import { RescheduleAppointmentDialog } from './reschedule-appointment-dialog';
+
+/** Only an appointment still to come can move; a past one can only be closed (P2.3). */
+const isMovable = (a: Appointment) =>
+  a.status === 'scheduled' && Date.parse(a.startsAt) > Date.now();
 
 const OPEN = ['scheduled', 'arrived'];
 
@@ -81,9 +86,13 @@ export function AppointmentsTable({
                     {a.doctorId === consultAs && OPEN.includes(a.status) && (
                       <ConsultButton centerId={centerId} appointment={a} />
                     )}
+                    {canManage && isMovable(a) && (
+                      <RescheduleAppointmentDialog centerId={centerId} appointment={a} />
+                    )}
                     {canManage && (
                       <AppointmentActions
                         status={a.status}
+                        startsAt={a.startsAt}
                         pending={change.isPending}
                         onChange={(status) => change.mutate({ id: a.id, status })}
                       />

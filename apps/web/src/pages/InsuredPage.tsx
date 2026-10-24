@@ -6,7 +6,7 @@ import {
   type CurrentUser,
   type InsuredAffiliation,
 } from '@medical-ins/shared';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useDeferredValue, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router';
 import { formatPeriod } from '@/components/affiliations/affiliations-table';
 import { AffiliationStatusBadge } from '@/components/affiliations/affiliation-status-badge';
@@ -49,6 +49,8 @@ export function InsuredPage() {
   const [params, setParams] = useSearchParams();
   const insurerId = insurers.find((i) => i.id === params.get('assureur'))?.id ?? insurers[0]?.id;
   const [status, setStatus] = useState<AffiliationStatus>('pending');
+  const [memberNumber, setMemberNumber] = useState('');
+  const deferredMemberNumber = useDeferredValue(memberNumber.trim());
 
   if (!insurerId) return <p className="text-muted-foreground">Aucun assureur accessible.</p>;
 
@@ -76,18 +78,35 @@ export function InsuredPage() {
           </Select>
         </div>
       </div>
-      <InsuredList insurerId={insurerId} status={status} />
+      <Input
+        type="search"
+        placeholder="Rechercher par n° d'assuré"
+        aria-label="N° d'assuré"
+        value={memberNumber}
+        onChange={(e) => setMemberNumber(e.target.value)}
+        className="max-w-md"
+      />
+      <InsuredList insurerId={insurerId} status={status} memberNumber={deferredMemberNumber} />
     </section>
   );
 }
 
-function InsuredList({ insurerId, status }: { insurerId: string; status: AffiliationStatus }) {
-  const affiliations = useInsuredAffiliations(insurerId, status);
+export function InsuredList({
+  insurerId,
+  status,
+  memberNumber,
+}: {
+  insurerId: string;
+  status: AffiliationStatus;
+  memberNumber: string;
+}) {
+  const affiliations = useInsuredAffiliations(insurerId, status, memberNumber);
   const decide = useDecideAffiliation(insurerId);
 
   if (affiliations.error) return <ErrorAlert error={affiliations.error} />;
   if (!affiliations.data) return <p className="text-muted-foreground">Chargement…</p>;
-  if (affiliations.data.length === 0) {
+  const rows = affiliations.data.pages.flat();
+  if (rows.length === 0) {
     return <p className="text-muted-foreground">Aucune affiliation.</p>;
   }
 
@@ -106,7 +125,7 @@ function InsuredList({ insurerId, status }: { insurerId: string; status: Affilia
           </TableRow>
         </TableHeader>
         <TableBody>
-          {affiliations.data.map((a) => (
+          {rows.map((a) => (
             <TableRow key={a.id}>
               <TableCell>
                 <div className="font-medium">
@@ -149,6 +168,16 @@ function InsuredList({ insurerId, status }: { insurerId: string; status: Affilia
           ))}
         </TableBody>
       </Table>
+      {affiliations.hasNextPage && (
+        <Button
+          variant="outline"
+          className="justify-self-center"
+          disabled={affiliations.isFetchingNextPage}
+          onClick={() => affiliations.fetchNextPage()}
+        >
+          Charger plus
+        </Button>
+      )}
     </div>
   );
 }

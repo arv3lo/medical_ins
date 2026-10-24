@@ -16,6 +16,7 @@ const affiliation: Affiliation = {
   endsOn: null,
   status: 'validated',
   rejectionReason: null,
+  declaredByOrganizationId: 'center',
 };
 
 describe('AffiliationsTable', () => {
@@ -36,5 +37,23 @@ describe('AffiliationsTable', () => {
     );
     expect(html).toContain('Refusée');
     expect(html).toContain('Numéro inconnu');
+  });
+
+  it('offers to withdraw only the pending declarations made by this center', () => {
+    const pending = { ...affiliation, status: 'pending' as const };
+    const render = (a: Affiliation, withdrawableFrom?: string) =>
+      renderToString(
+        <AffiliationsTable
+          affiliations={[a]}
+          today="2026-06-01"
+          withdrawableFrom={withdrawableFrom}
+          onWithdraw={() => {}}
+        />,
+      );
+
+    expect(render(pending, 'center')).toContain('Retirer');
+    expect(render(pending, 'other-center')).not.toContain('Retirer');
+    expect(render(pending)).not.toContain('Retirer');
+    expect(render(affiliation, 'center')).not.toContain('Retirer');
   });
 });

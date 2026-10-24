@@ -1,4 +1,5 @@
 import {
+  type Addendum,
   addendumInputSchema,
   createConsultationInputSchema,
   icd10QuerySchema,
@@ -35,6 +36,10 @@ const ONE_PER_APPOINTMENT = 'consultations_appointment_id_unique';
 const alreadyConsulted = (consultationId?: string) =>
   new HttpError(409, 'Une consultation existe déjà pour ce rendez-vous', { consultationId });
 
+// Audit entries hold ids and metadata only: audit_logs can never be purged, and it is not
+// restricted to care roles, so no medical content (reason, notes, vitals, diagnoses…) goes there.
+// Writes answer with ids only, too: the client reads the record back through the GET, which
+// audits that read as medical_record.read.
 export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): void {
   app.get('/api/referentials/icd10', async (request) => {
     requireUser(request);
@@ -51,9 +56,10 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
-        action: 'medical_record.list',
+        action: 'medical_record.read',
         entityType: 'patient',
         entityId: patientId,
+        after: { consultationIds: list.map((c) => c.id) },
         ip: request.ip,
       });
       return list;
@@ -113,12 +119,12 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
           action: 'consultation.create',
           entityType: 'consultation',
           entityId: created!.id,
-          after: created,
+          after: { patientId: created!.patientId, appointmentId: created!.appointmentId },
           ip: request.ip,
         });
         return created!.id;
       });
-      return reply.status(201).send(await findConsultation(db, id, actor.id));
+      return reply.status(201).send({ id });
     } catch (error) {
       const cause = (error as { cause?: { constraint_name?: string } }).cause;
       if (cause?.constraint_name === ONE_PER_APPOINTMENT) throw alreadyConsulted();
@@ -131,20 +137,18 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
     const actor = requirePermission(request, orgId, 'medical_record.write');
     const input = updateConsultationInputSchema.parse(request.body);
     return db.transaction(async (tx) => {
-      const before = await requireOwnDraft(tx, orgId, consultationId, actor.id);
+      await requireOwnDraft(tx, orgId, consultationId, actor.id);
       await updateDraft(tx, consultationId, input);
-      const after = await findConsultation(tx, consultationId, actor.id);
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
         action: 'consultation.update',
         entityType: 'consultation',
         entityId: consultationId,
-        before,
-        after,
+        after: { fields: Object.keys(input) },
         ip: request.ip,
       });
-      return after;
+      return { id: consultationId };
     });
   });
 
@@ -155,13 +159,14 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       const draft = await requireOwnDraft(tx, orgId, consultationId, actor.id);
       const problem = signingProblem(draft);
       if (problem) throw new HttpError(400, problem);
-      await markSigned(tx, consultationId);
+      const signedAt = await markSigned(tx, consultationId);
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
         action: 'consultation.sign',
         entityType: 'consultation',
         entityId: consultationId,
+        after: { signedAt },
         ip: request.ip,
       });
       // Signing the consultation ends the visit it came from.
@@ -181,7 +186,7 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
           });
         }
       }
-      return findConsultation(tx, consultationId, actor.id);
+      return { id: consultationId, signedAt: signedAt.toISOString() };
     });
   });
 
@@ -189,7 +194,7 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
     const { orgId, consultationId } = consultationParams.parse(request.params);
     const actor = requirePermission(request, orgId, 'medical_record.write');
     const { content } = addendumInputSchema.parse(request.body);
-    const consultation = await db.transaction(async (tx) => {
+    const addendum = await db.transaction(async (tx) => {
       const target = await findConsultation(tx, consultationId, actor.id);
       if (target.organizationId !== orgId) throw notFound('Consultation');
       if (!target.signedAt) throw new HttpError(409, 'Modifiez le brouillon directement');
@@ -203,11 +208,16 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
         action: 'consultation.addendum',
         entityType: 'consultation',
         entityId: consultationId,
-        after: added,
+        after: { addendumId: added!.id },
         ip: request.ip,
       });
-      return findConsultation(tx, consultationId, actor.id);
+      return added!;
     });
-    return reply.status(201).send(consultation);
+    return reply.status(201).send({
+      id: addendum.id,
+      content: addendum.content,
+      createdAt: addendum.createdAt.toISOString(),
+      author: { fullName: actor.fullName },
+    } satisfies Addendum);
   });
 }

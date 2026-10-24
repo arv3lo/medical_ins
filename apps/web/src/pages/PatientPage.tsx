@@ -1,4 +1,9 @@
-import { SEX_LABELS, type CurrentUser, type Patient } from '@medical-ins/shared';
+import {
+  MAX_APPOINTMENT_RANGE_DAYS,
+  SEX_LABELS,
+  type CurrentUser,
+  type Patient,
+} from '@medical-ins/shared';
 import { ArrowLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
@@ -14,10 +19,10 @@ import { PatientForm } from '@/components/patients/patient-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
-import { usePatientAffiliations } from '@/lib/affiliations';
+import { usePatientAffiliations, useWithdrawAffiliation } from '@/lib/affiliations';
 import { useAppointments } from '@/lib/appointments';
 import { usePatientConsultations } from '@/lib/consultations';
-import { formatDate } from '@/lib/format';
+import { addDays, daysRange, formatDate, localToday } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
 import { useCenterParam } from '@/lib/use-center-param';
 
@@ -111,6 +116,7 @@ function AffiliationsCard({
   canDeclare: boolean;
 }) {
   const affiliations = usePatientAffiliations(centerId, patientId);
+  const withdraw = useWithdrawAffiliation(centerId, patientId);
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -119,11 +125,18 @@ function AffiliationsCard({
       </CardHeader>
       <CardContent>
         {affiliations.error && <ErrorAlert error={affiliations.error} />}
+        {withdraw.error && <ErrorAlert error={withdraw.error} />}
         {affiliations.data?.length === 0 && (
           <p className="text-muted-foreground">Aucune affiliation déclarée.</p>
         )}
         {affiliations.data && affiliations.data.length > 0 && (
-          <AffiliationsTable affiliations={affiliations.data} today={today()} />
+          <AffiliationsTable
+            affiliations={affiliations.data}
+            today={today()}
+            withdrawableFrom={canDeclare ? centerId : undefined}
+            onWithdraw={(id) => withdraw.mutate(id)}
+            withdrawing={withdraw.isPending}
+          />
         )}
       </CardContent>
     </Card>
@@ -183,11 +196,16 @@ function AppointmentsCard({
   patient: Patient;
   canManage: boolean;
 }) {
-  const appointments = useAppointments(centerId, { patientId: patient.id });
+  // Last month and the next two: the widest range one list may cover.
+  const range = daysRange(addDays(localToday(), -30), MAX_APPOINTMENT_RANGE_DAYS);
+  const appointments = useAppointments(centerId, { ...range, patientId: patient.id });
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Rendez-vous</CardTitle>
+        <div>
+          <CardTitle>Rendez-vous</CardTitle>
+          <p className="text-sm text-muted-foreground">Le mois passé et les deux prochains</p>
+        </div>
         {canManage && <BookAppointmentDialog centerId={centerId} patient={patient} />}
       </CardHeader>
       <CardContent>

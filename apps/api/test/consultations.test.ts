@@ -51,7 +51,7 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     inject('POST', base(), cookie, { patientId, reason: 'Fièvre depuis 3 jours', ...payload });
 
   async function draft(cookie = doctor) {
-    return (await start(cookie)).json<Consultation>();
+    return (await start(cookie)).json<{ id: string }>();
   }
 
   async function signed() {
@@ -61,6 +61,37 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     });
     await inject('POST', `${base()}/${consultation.id}/sign`, doctor);
     return consultation;
+  }
+
+  /**
+   * Sends `request` while another transaction signs consultation `id`, and commits that signature
+   * once the request either finished or waits on a lock: the interleaving of two concurrent calls,
+   * made deterministic.
+   */
+  async function whileSigning(id: string, request: () => ReturnType<typeof inject>) {
+    let pending!: ReturnType<typeof inject>;
+    await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(consultations)
+        .set({ signedAt: sql`now()` })
+        .where(eq(consultations.id, id));
+      let settled = false;
+      pending = request().finally(() => {
+        settled = true;
+      });
+      while (!settled && !(await waitingOnLock())) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    });
+    return pending;
+  }
+
+  async function waitingOnLock() {
+    const rows = await ctx.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    return rows[0]!.n > 0;
   }
 
   const actions = async (action: string) =>
@@ -94,7 +125,11 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
   it('lets a doctor open a draft consultation for a patient of the center, audited', async () => {
     const response = await start();
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
+    // Writes answer with ids only: the content is read back through the audited GET.
+    const { id } = response.json<{ id: string }>();
+    expect(response.json()).toEqual({ id });
+    const read = await inject('GET', `${base()}/${id}`, doctor);
+    expect(read.json()).toMatchObject({
       reason: 'Fièvre depuis 3 jours',
       signedAt: null,
       diagnoses: [],
@@ -126,7 +161,9 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       ],
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    expect(response.json()).toEqual({ id: consultation.id });
+    const read = await inject('GET', `${base()}/${consultation.id}`, doctor);
+    expect(read.json()).toMatchObject({
       vitals: { temperatureC: 39.2, heartRate: 104 },
       diagnoses: [
         { code: 'B54', label: 'Paludisme, sans précision', primary: true },
@@ -134,9 +171,10 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       ],
     });
 
-    const replaced = await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
+    await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
       diagnoses: [{ code: 'J06.9', primary: true }],
     });
+    const replaced = await inject('GET', `${base()}/${consultation.id}`, doctor);
     expect(replaced.json<Consultation>().diagnoses.map((d) => d.code)).toEqual(['J06.9']);
     expect(await actions('consultation.update')).toHaveLength(2);
   });
@@ -169,7 +207,7 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     });
     const sign = await inject('POST', `${base()}/${consultation.id}/sign`, doctor);
     expect(sign.statusCode).toBe(200);
-    expect(sign.json<Consultation>().signedAt).not.toBeNull();
+    expect(sign.json()).toEqual({ id: consultation.id, signedAt: expect.any(String) });
     expect(await actions('consultation.sign')).toHaveLength(1);
 
     const edit = await inject('PATCH', `${base()}/${consultation.id}`, doctor, { notes: 'x' });
@@ -179,17 +217,86 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     );
   });
 
+  it('refuses a draft edit that races a signature, keeping the signed diagnoses', async () => {
+    const consultation = await draft();
+    const url = `${base()}/${consultation.id}`;
+    await inject('PATCH', url, doctor, { diagnoses: [{ code: 'B54', primary: true }] });
+    const edit = await whileSigning(consultation.id, () =>
+      inject('PATCH', url, doctor, { diagnoses: [{ code: 'J06.9', primary: false }] }),
+    );
+    expect(edit.statusCode).toBe(409);
+    const read = await inject('GET', url, doctor);
+    expect(read.json<Consultation>().diagnoses).toMatchObject([{ code: 'B54', primary: true }]);
+  });
+
+  it('answers 409, not 500, to a signature that races another one', async () => {
+    const consultation = await draft();
+    const url = `${base()}/${consultation.id}`;
+    await inject('PATCH', url, doctor, { diagnoses: [{ code: 'B54', primary: true }] });
+    const sign = await whileSigning(consultation.id, () => inject('POST', `${url}/sign`, doctor));
+    expect(sign.statusCode).toBe(409);
+    expect(sign.json()).toMatchObject({ message: 'Consultation signée : ajoutez un avenant' });
+  });
+
+  /** Expects `query` to be stopped by one of the read-only triggers of migration 0008. */
+  const rejectedBy = (query: Promise<unknown>, message: RegExp) =>
+    expect(query).rejects.toMatchObject({ cause: { message: expect.stringMatching(message) } });
+
   it('enforces read-only signed consultations in the database too', async () => {
     const consultation = await signed();
-    await expect(
-      ctx.db
-        .update(consultations)
-        .set({ notes: 'changed' })
-        .where(eq(consultations.id, consultation.id)),
-    ).rejects.toThrow();
-    await expect(
-      ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${consultation.id}`),
-    ).rejects.toThrow();
+    const id = consultation.id;
+    await rejectedBy(
+      ctx.db.update(consultations).set({ notes: 'changed' }).where(eq(consultations.id, id)),
+      /is signed \(UPDATE rejected\)/,
+    );
+    // Rejected by the trigger, before the foreign keys of its diagnoses are even checked.
+    await rejectedBy(
+      ctx.db.delete(consultations).where(eq(consultations.id, id)),
+      /is signed \(DELETE rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`UPDATE diagnoses SET is_primary = false WHERE consultation_id = ${id}`),
+      /is signed \(UPDATE on diagnoses rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${id}`),
+      /is signed \(DELETE on diagnoses rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(
+        sql`INSERT INTO diagnoses (consultation_id, code, is_primary, position)
+            VALUES (${id}, 'R50.9', false, 1)`,
+      ),
+      /is signed \(INSERT on diagnoses rejected\)/,
+    );
+    await inject('POST', `${base()}/${id}/addenda`, doctor, { content: 'Avenant' });
+    await rejectedBy(
+      ctx.db.execute(sql`UPDATE consultation_addenda SET content = 'y'`),
+      /append-only \(UPDATE rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`DELETE FROM consultation_addenda`),
+      /append-only \(DELETE rejected\)/,
+    );
+  });
+
+  it('leaves a draft editable and deletable in the database', async () => {
+    const consultation = await draft();
+    await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
+      diagnoses: [{ code: 'B54', primary: true }],
+    });
+    await ctx.db
+      .update(consultations)
+      .set({ notes: 'changed' })
+      .where(eq(consultations.id, consultation.id));
+    await ctx.db.execute(
+      sql`UPDATE diagnoses SET is_primary = false WHERE consultation_id = ${consultation.id}`,
+    );
+    await ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${consultation.id}`);
+    await ctx.db.delete(consultations).where(eq(consultations.id, consultation.id));
+    expect(
+      await ctx.db.select().from(consultations).where(eq(consultations.id, consultation.id)),
+    ).toEqual([]);
   });
 
   it('shows signed consultations to care roles of every linked center, auditing each read', async () => {
@@ -233,7 +340,10 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect(
       list.json<{ id: string; primaryDiagnosis: unknown }[]>().find((c) => c.id === done.id),
     ).toMatchObject({ primaryDiagnosis: { code: 'B54' } });
-    expect(await actions('medical_record.list')).toHaveLength(1);
+    // The audit records which consultations were shown, by id only.
+    expect(await actions('medical_record.read')).toMatchObject([
+      { entityType: 'patient', entityId: patientId, after: { consultationIds: ids } },
+    ]);
     expect((await inject('GET', url, reception)).statusCode).toBe(403);
   });
 
@@ -247,14 +357,51 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       content: 'Goutte épaisse positive',
     });
     expect(added.statusCode).toBe(201);
+    // Only the new addendum: the rest of the record is read back through the audited GET.
+    expect(added.json()).toEqual({
+      id: expect.any(String),
+      content: 'Goutte épaisse positive',
+      createdAt: expect.any(String),
+      author: { fullName: expect.any(String) },
+    });
     const read = await inject('GET', `${base()}/${consultation.id}`, doctor);
     expect(read.json<Consultation>().addenda).toMatchObject([
       { content: 'Goutte épaisse positive' },
     ]);
     expect(await actions('consultation.addendum')).toHaveLength(1);
-    await expect(
-      ctx.db.execute(sql`UPDATE consultation_addenda SET content = 'y'`),
-    ).rejects.toThrow();
+  });
+
+  it('keeps medical content out of the append-only audit log', async () => {
+    const created = await start(doctor, { reason: 'MARKER-REASON' });
+    const { id } = created.json<{ id: string }>();
+    await inject('PATCH', `${base()}/${id}`, doctor, {
+      reason: 'MARKER-REASON-2',
+      examination: 'MARKER-EXAMINATION',
+      notes: 'MARKER-NOTES',
+      vitals: { temperatureC: 39.2 },
+      diagnoses: [{ code: 'B54', primary: true }],
+    });
+    await inject('POST', `${base()}/${id}/sign`, doctor);
+    const added = await inject('POST', `${base()}/${id}/addenda`, doctor, {
+      content: 'MARKER-ADDENDUM',
+    });
+    expect(added.statusCode).toBe(201);
+
+    const rows = await ctx.db.select().from(auditLogs);
+    const json = JSON.stringify(rows);
+    for (const forbidden of ['MARKER', 'Paludisme', 'temperatureC', '39.2']) {
+      expect(json).not.toContain(forbidden);
+    }
+    expect(await actions('consultation.update')).toMatchObject([
+      {
+        before: null,
+        after: { fields: ['reason', 'examination', 'vitals', 'notes', 'diagnoses'] },
+      },
+    ]);
+    const [sign] = await actions('consultation.sign');
+    expect(sign!.after).toMatchObject({ signedAt: expect.any(String) });
+    const [addendum] = await actions('consultation.addendum');
+    expect(addendum).toMatchObject({ entityId: id, after: { addendumId: expect.any(String) } });
   });
 
   describe('from an appointment', () => {
@@ -267,7 +414,8 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       const booked = await inject('POST', `/api/organizations/${center}/appointments`, reception, {
         patientId,
         doctorId: doctorRow!.id,
-        startsAt: '2099-11-03T09:00:00+03:00',
+        // Soon enough for the patient to be marked arrived (from an hour before the start).
+        startsAt: new Date(Date.now() + 30 * 60_000).toISOString(),
         durationMinutes: 20,
       });
       appointmentId = booked.json<{ id: string }>().id;

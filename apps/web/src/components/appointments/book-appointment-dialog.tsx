@@ -1,4 +1,4 @@
-import { APPOINTMENT_DURATIONS, type Patient } from '@medical-ins/shared';
+import type { Patient } from '@medical-ins/shared';
 import { CalendarPlusIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { ErrorAlert } from '@/components/error-alert';
@@ -13,15 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useBookAppointment, useDoctors } from '@/lib/appointments';
+import { useBookAppointment } from '@/lib/appointments';
 import { localToday, toInstant } from '@/lib/format';
+import { type Slot, SlotFields } from './slot-fields';
 
 type Picked = Pick<Patient, 'id' | 'lastName' | 'firstNames'>;
 
@@ -36,13 +30,14 @@ export function BookAppointmentDialog({
   date?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const doctors = useDoctors(centerId);
   const book = useBookAppointment(centerId);
   const [patient, setPatient] = useState<Picked | null>(fixedPatient ?? null);
-  const [doctorId, setDoctorId] = useState('');
-  const [date, setDate] = useState(initialDate ?? localToday());
-  const [time, setTime] = useState('');
-  const [duration, setDuration] = useState('20');
+  const [slot, setSlot] = useState<Slot>({
+    doctorId: '',
+    date: initialDate ?? localToday(),
+    time: '',
+    duration: '20',
+  });
   const [reason, setReason] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -51,15 +46,15 @@ export function BookAppointmentDialog({
     book.mutate(
       {
         patientId: patient.id,
-        doctorId,
-        startsAt: toInstant(date, time),
-        durationMinutes: Number(duration),
+        doctorId: slot.doctorId,
+        startsAt: toInstant(slot.date, slot.time),
+        durationMinutes: Number(slot.duration),
         reason: reason.trim() || undefined,
       },
       {
         onSuccess: () => {
           setOpen(false);
-          setTime('');
+          setSlot((current) => ({ ...current, time: '' }));
           setReason('');
           if (!fixedPatient) setPatient(null);
         },
@@ -72,7 +67,9 @@ export function BookAppointmentDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) book.reset();
+        // Open on the day the agenda shows now, not the one it showed when first rendered.
+        if (next) setSlot((current) => ({ ...current, date: initialDate ?? localToday() }));
+        else book.reset();
       }}
     >
       <DialogTrigger asChild>
@@ -88,7 +85,6 @@ export function BookAppointmentDialog({
         <DialogHeader>
           <DialogTitle>Nouveau rendez-vous</DialogTitle>
         </DialogHeader>
-        {doctors.error && <ErrorAlert error={doctors.error} />}
         {book.error && <ErrorAlert error={book.error} />}
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-2">
@@ -101,65 +97,12 @@ export function BookAppointmentDialog({
               <PatientPicker centerId={centerId} value={patient} onChange={setPatient} />
             )}
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="doctor">Médecin</Label>
-            <Select value={doctorId} onValueChange={setDoctorId} required>
-              <SelectTrigger id="doctor" className="w-full">
-                <SelectValue placeholder="Choisir" />
-              </SelectTrigger>
-              <SelectContent>
-                {doctors.data?.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="date">Date</Label>
-              <Input
-                id="date"
-                type="date"
-                min={localToday()}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="time">Heure</Label>
-              <Input
-                id="time"
-                type="time"
-                step={300}
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="duration">Durée</Label>
-              <Select value={duration} onValueChange={setDuration}>
-                <SelectTrigger id="duration" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {APPOINTMENT_DURATIONS.map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {m} min
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <SlotFields centerId={centerId} value={slot} onChange={setSlot} />
           <div className="grid gap-2">
             <Label htmlFor="reason">Motif (facultatif)</Label>
             <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
-          <Button type="submit" disabled={book.isPending || !patient || !doctorId}>
+          <Button type="submit" disabled={book.isPending || !patient || !slot.doctorId}>
             Réserver
           </Button>
         </form>

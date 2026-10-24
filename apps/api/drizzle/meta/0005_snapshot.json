@@ -1,5 +1,5 @@
 {
-  "id": "5c36d424-78a8-4e4f-af99-b7e3d3bb3f66",
+  "id": "8491e32e-975c-42ed-8222-5074455855c5",
   "prevId": "02b85fd9-82ae-4875-a7cd-6c9851a826ff",
   "version": "7",
   "dialect": "postgresql",
@@ -100,28 +100,6 @@
         }
       },
       "indexes": {
-        "affiliations_holder_member_number_unique": {
-          "name": "affiliations_holder_member_number_unique",
-          "columns": [
-            {
-              "expression": "insurer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "member_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"affiliations\".\"holder_status\" = 'holder'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "affiliations_patient_id_index": {
           "name": "affiliations_patient_id_index",
           "columns": [
@@ -207,172 +185,6 @@
         "affiliations_dates_check": {
           "name": "affiliations_dates_check",
           "value": "\"affiliations\".\"ends_on\" IS NULL OR \"affiliations\".\"ends_on\" >= \"affiliations\".\"starts_on\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.appointments": {
-      "name": "appointments",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "patient_id": {
-          "name": "patient_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "doctor_id": {
-          "name": "doctor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "duration_minutes": {
-          "name": "duration_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "appointment_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'scheduled'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "appointments_organization_id_starts_at_index": {
-          "name": "appointments_organization_id_starts_at_index",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "appointments_patient_id_index": {
-          "name": "appointments_patient_id_index",
-          "columns": [
-            {
-              "expression": "patient_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "appointments_organization_id_organizations_id_fk": {
-          "name": "appointments_organization_id_organizations_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "appointments_patient_id_patients_id_fk": {
-          "name": "appointments_patient_id_patients_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "patients",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "appointments_doctor_id_users_id_fk": {
-          "name": "appointments_doctor_id_users_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "doctor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "appointments_ends_after_start": {
-          "name": "appointments_ends_after_start",
-          "value": "\"appointments\".\"ends_at\" > \"appointments\".\"starts_at\""
         }
       },
       "isRLSEnabled": false
@@ -1043,17 +855,6 @@
         "pending",
         "validated",
         "rejected"
-      ]
-    },
-    "public.appointment_status": {
-      "name": "appointment_status",
-      "schema": "public",
-      "values": [
-        "scheduled",
-        "arrived",
-        "completed",
-        "cancelled",
-        "no_show"
       ]
     },
     "public.holder_status": {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPatientInputSchema, updatePatientInputSchema } from './patients.js';
 
 const valid = {
@@ -7,6 +7,10 @@ const valid = {
   birthDate: '1985-03-12',
   sex: 'male',
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('createPatientInputSchema', () => {
   it('accepts a minimal patient and trims names', () => {
@@ -18,6 +22,26 @@ describe('createPatientInputSchema', () => {
       false,
     );
     expect(createPatientInputSchema.safeParse({ ...valid, birthDate: '12/03/1985' }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a calendar date that does not exist or is before 1900', () => {
+    const accepts = (birthDate: string) =>
+      createPatientInputSchema.safeParse({ ...valid, birthDate }).success;
+    expect(accepts('2024-02-29')).toBe(true);
+    expect(accepts('1900-01-01')).toBe(true);
+    expect(accepts('2023-02-30')).toBe(false);
+    expect(accepts('2023-13-01')).toBe(false);
+    expect(accepts('1899-12-31')).toBe(false);
+  });
+
+  it('accepts a baby born today in Madagascar while it is still yesterday in UTC', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-24T22:30:00Z') });
+    expect(createPatientInputSchema.safeParse({ ...valid, birthDate: '2026-10-25' }).success).toBe(
+      true,
+    );
+    expect(createPatientInputSchema.safeParse({ ...valid, birthDate: '2026-10-26' }).success).toBe(
       false,
     );
   });
@@ -39,5 +63,12 @@ describe('updatePatientInputSchema', () => {
   it('accepts a partial update but not an empty one', () => {
     expect(updatePatientInputSchema.safeParse({ phone: '034 12 345 67' }).success).toBe(true);
     expect(updatePatientInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('clears an optional field sent as null', () => {
+    expect(updatePatientInputSchema.parse({ phone: null, nationalId: null })).toEqual({
+      phone: null,
+      nationalId: null,
+    });
   });
 });

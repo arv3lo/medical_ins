@@ -1,11 +1,12 @@
 import type {
+  Addendum,
   Consultation,
   ConsultationSummary,
   CreateConsultationInput,
   Icd10Code,
   UpdateConsultationInput,
 } from '@medical-ins/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 const base = (centerId: string) => `/organizations/${centerId}/consultations`;
@@ -28,41 +29,49 @@ export function useConsultation(centerId: string, consultationId: string) {
 export function useStartConsultation(centerId: string) {
   return useMutation({
     mutationFn: (input: CreateConsultationInput) =>
-      api<Consultation>(base(centerId), { method: 'POST', body: JSON.stringify(input) }),
+      api<{ id: string }>(base(centerId), { method: 'POST', body: JSON.stringify(input) }),
   });
 }
 
-/** Mutations on one consultation; each answers with the consultation as it now stands. */
-function useConsultationMutation<T>(
+/**
+ * Mutations on one consultation. The API answers with ids only, never the medical content, so
+ * the consultation and the lists of this center are read back through the GETs, which audit
+ * each read.
+ */
+export function consultationMutation<T, R>(
+  queryClient: QueryClient,
   centerId: string,
   consultationId: string,
-  request: (url: string, input: T) => Promise<Consultation>,
+  request: (url: string, input: T) => Promise<R>,
+) {
+  return {
+    mutationFn: (input: T) => request(`${base(centerId)}/${consultationId}`, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['consultations', centerId] }),
+  };
+}
+
+function useConsultationMutation<T, R>(
+  centerId: string,
+  consultationId: string,
+  request: (url: string, input: T) => Promise<R>,
 ) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: T) => request(`${base(centerId)}/${consultationId}`, input),
-    onSuccess: (consultation) => {
-      queryClient.setQueryData(['consultations', centerId, consultationId], consultation);
-      return queryClient.invalidateQueries({
-        queryKey: ['consultations', centerId, 'patient', consultation.patientId],
-      });
-    },
-  });
+  return useMutation(consultationMutation(queryClient, centerId, consultationId, request));
 }
 
 export const useUpdateConsultation = (centerId: string, consultationId: string) =>
   useConsultationMutation(centerId, consultationId, (url, input: UpdateConsultationInput) =>
-    api<Consultation>(url, { method: 'PATCH', body: JSON.stringify(input) }),
+    api<{ id: string }>(url, { method: 'PATCH', body: JSON.stringify(input) }),
   );
 
 export const useSignConsultation = (centerId: string, consultationId: string) =>
-  useConsultationMutation<void>(centerId, consultationId, (url) =>
-    api<Consultation>(`${url}/sign`, { method: 'POST' }),
+  useConsultationMutation<void, { id: string; signedAt: string }>(centerId, consultationId, (url) =>
+    api(`${url}/sign`, { method: 'POST' }),
   );
 
 export const useAddAddendum = (centerId: string, consultationId: string) =>
   useConsultationMutation(centerId, consultationId, (url, content: string) =>
-    api<Consultation>(`${url}/addenda`, { method: 'POST', body: JSON.stringify({ content }) }),
+    api<Addendum>(`${url}/addenda`, { method: 'POST', body: JSON.stringify({ content }) }),
   );
 
 export function useIcd10Search(query: string) {
