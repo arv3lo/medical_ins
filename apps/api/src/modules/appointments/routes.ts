@@ -3,6 +3,7 @@ import {
   canChangeAppointmentStatus,
   changeAppointmentStatusInputSchema,
   createAppointmentInputSchema,
+  isStatusChangeDue,
   rescheduleAppointmentInputSchema,
 } from '@medical-ins/shared';
 import { eq } from 'drizzle-orm';
@@ -126,6 +127,12 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
       const before = await lockAppointment(tx, orgId, appointmentId);
       if (!canChangeAppointmentStatus(before.status, status)) {
         throw new HttpError(409, 'Ce changement de statut n’est pas possible');
+      }
+      if (!isStatusChangeDue(status, before.startsAt, new Date())) {
+        throw new HttpError(
+          409,
+          'Ce statut ne peut pas encore être enregistré pour ce rendez-vous',
+        );
       }
       await setStatus(tx, appointmentId, status);
       await audit(tx, {

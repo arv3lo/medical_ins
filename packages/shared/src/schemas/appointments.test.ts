@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { canChangeAppointmentStatus, createAppointmentInputSchema } from './appointments.js';
+import {
+  canChangeAppointmentStatus,
+  createAppointmentInputSchema,
+  isStatusChangeDue,
+} from './appointments.js';
 
 describe('createAppointmentInputSchema', () => {
   const valid = {
@@ -40,5 +44,26 @@ describe('canChangeAppointmentStatus', () => {
     expect(canChangeAppointmentStatus('cancelled', 'scheduled')).toBe(false);
     expect(canChangeAppointmentStatus('completed', 'arrived')).toBe(false);
     expect(canChangeAppointmentStatus('no_show', 'arrived')).toBe(false);
+  });
+});
+
+describe('isStatusChangeDue', () => {
+  const startsAt = new Date('2026-11-03T09:00:00+03:00');
+  const minutesFromStart = (minutes: number) => new Date(startsAt.getTime() + minutes * 60_000);
+
+  it('records an arrival from one hour before the start', () => {
+    expect(isStatusChangeDue('arrived', startsAt, minutesFromStart(-61))).toBe(false);
+    expect(isStatusChangeDue('arrived', startsAt, minutesFromStart(-60))).toBe(true);
+  });
+
+  it('records a no-show or a completion only once the start has passed', () => {
+    for (const status of ['no_show', 'completed'] as const) {
+      expect(isStatusChangeDue(status, startsAt, minutesFromStart(-1))).toBe(false);
+      expect(isStatusChangeDue(status, startsAt, minutesFromStart(0))).toBe(true);
+    }
+  });
+
+  it('cancels at any time', () => {
+    expect(isStatusChangeDue('cancelled', startsAt, minutesFromStart(-60 * 24 * 30))).toBe(true);
   });
 });

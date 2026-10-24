@@ -1,4 +1,8 @@
-import { canChangeAppointmentStatus, type AppointmentStatus } from '@medical-ins/shared';
+import {
+  canChangeAppointmentStatus,
+  isStatusChangeDue,
+  type AppointmentStatus,
+} from '@medical-ins/shared';
 import { Button } from '@/components/ui/button';
 
 const ACTIONS: { to: AppointmentStatus; label: string; variant: 'default' | 'outline' }[] = [
@@ -8,17 +12,24 @@ const ACTIONS: { to: AppointmentStatus; label: string; variant: 'default' | 'out
   { to: 'cancelled', label: 'Annuler', variant: 'outline' },
 ];
 
-/** The status changes the rules allow from `status`, as buttons. */
+/** The status changes the rules allow from `status` at `now`, as buttons. */
 export function AppointmentActions({
   status,
+  startsAt,
+  now = new Date(),
   pending,
   onChange,
 }: {
   status: AppointmentStatus;
+  startsAt: string;
+  now?: Date;
   pending: boolean;
   onChange: (to: AppointmentStatus) => void;
 }) {
-  const actions = ACTIONS.filter((a) => canChangeAppointmentStatus(status, a.to));
+  const actions = ACTIONS.filter(
+    (a) =>
+      canChangeAppointmentStatus(status, a.to) && isStatusChangeDue(a.to, new Date(startsAt), now),
+  );
   if (actions.length === 0) return null;
   return (
     <div className="flex justify-end gap-2">

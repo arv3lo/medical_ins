@@ -32,6 +32,20 @@ export function canChangeAppointmentStatus(from: AppointmentStatus, to: Appointm
   return TRANSITIONS[from].includes(to);
 }
 
+/** Patients often come early: their arrival can be recorded up to this long before the start. */
+export const EARLY_ARRIVAL_MINUTES = 60;
+
+/**
+ * Whether `to` may be recorded `now` for an appointment starting at `startsAt`. A no-show or a
+ * completion only makes sense once the start has passed; a cancellation is possible at any time.
+ * This keeps a mis-click on « Absent » weeks ahead from freeing the doctor's slot.
+ */
+export function isStatusChangeDue(to: AppointmentStatus, startsAt: Date, now: Date) {
+  if (to === 'cancelled') return true;
+  const margin = to === 'arrived' ? EARLY_ARRIVAL_MINUTES * 60_000 : 0;
+  return now.getTime() >= startsAt.getTime() - margin;
+}
+
 /** An instant with an explicit offset, normalized to UTC ISO so the API compares like with like. */
 const instantSchema = z
   .string()

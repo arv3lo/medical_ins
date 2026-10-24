@@ -70,6 +70,7 @@ export function AppointmentsTable({
                 <TableCell>
                   <AppointmentActions
                     status={a.status}
+                    startsAt={a.startsAt}
                     pending={change.isPending}
                     onChange={(status) => change.mutate({ id: a.id, status })}
                   />

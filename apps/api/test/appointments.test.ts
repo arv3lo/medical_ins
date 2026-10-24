@@ -195,15 +195,27 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
     expect(list.json()).toHaveLength(1);
   });
 
+  const statusOf = (id: string) => (value: string) =>
+    inject('POST', `${base()}/${id}/status`, reception, { status: value });
+
   it('follows the status rules', async () => {
-    const appointment = (await book()).json<{ id: string }>();
-    const status = (value: string) =>
-      inject('POST', `${base()}/${appointment.id}/status`, reception, { status: value });
+    const status = statusOf(await insertAppointment(new Date(Date.now() - 30 * 60_000)));
 
     expect((await status('completed')).statusCode).toBe(409);
     expect((await status('arrived')).json()).toMatchObject({ status: 'arrived' });
     expect((await status('cancelled')).statusCode).toBe(409);
     expect((await status('completed')).json()).toMatchObject({ status: 'completed' });
+  });
+
+  it('records an arrival from one hour before the start, a no-show only after it', async () => {
+    const later = statusOf((await book()).json<{ id: string }>().id);
+    expect((await later('arrived')).statusCode).toBe(409);
+    expect((await later('no_show')).statusCode).toBe(409);
+
+    const soon = statusOf(await insertAppointment(new Date(Date.now() + 30 * 60_000)));
+    expect((await soon('no_show')).statusCode).toBe(409);
+    expect((await soon('arrived')).json()).toMatchObject({ status: 'arrived' });
+    expect((await soon('completed')).statusCode).toBe(409);
   });
 
   it('reschedules a future appointment, still without overlap', async () => {
@@ -225,7 +237,7 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
 
   it('does not move an appointment that is no longer scheduled', async () => {
     const appointment = (await book()).json<{ id: string }>();
-    await inject('POST', `${base()}/${appointment.id}/status`, reception, { status: 'arrived' });
+    await inject('POST', `${base()}/${appointment.id}/status`, reception, { status: 'cancelled' });
     const moved = await inject('PATCH', `${base()}/${appointment.id}`, reception, {
       startsAt: at('11:00'),
     });
