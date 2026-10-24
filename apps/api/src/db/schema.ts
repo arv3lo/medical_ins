@@ -166,8 +166,9 @@ export const affiliations = pgTable(
 );
 
 /**
- * A slot with a doctor. An exclusion constraint (migration 0006) keeps a doctor's slots that are
- * still held from overlapping; `ends_at` is stored so the range is an immutable expression.
+ * A slot with a doctor. An exclusion constraint (migration 0006, the only home of that rule) keeps
+ * a doctor's held slots (scheduled, arrived, completed) from overlapping; cancelled and no-show
+ * appointments free theirs. `ends_at` is stored so the range is an immutable expression.
  */
 export const appointments = pgTable(
   'appointments',

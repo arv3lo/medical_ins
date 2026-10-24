@@ -17,9 +17,6 @@ export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
   no_show: 'Absent',
 };
 
-/** Statuses that still hold the doctor's time slot. */
-export const SLOT_HOLDING_STATUSES = ['scheduled', 'arrived', 'completed'] as const;
-
 const TRANSITIONS: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
   scheduled: ['arrived', 'cancelled', 'no_show'],
   arrived: ['completed'],
