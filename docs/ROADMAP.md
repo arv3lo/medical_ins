@@ -26,7 +26,7 @@ serveur).
 | P0    | Socle technique                                   | Fait      |
 | P1    | Comptes, organisations et référentiels            | À faire   |
 | P2    | Patients et dossiers médicaux                     | En cours  |
-| P3    | Prises en charge                                  | À faire   |
+| P3    | Prises en charge                                  | En cours  |
 | P4    | Facturation et remboursements                     | À faire   |
 | P5    | Tableaux de bord et statistiques                  | À faire   |
 | P6    | Sécurité, exploitation et mise en production      | À faire   |
@@ -213,7 +213,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
 Statuts : brouillon → soumise → en examen → accordée (totale ou partielle) / refusée /
 complément demandé → (soumise) ; accordée → utilisée → facturée ; annulée et expirée.
 
-- [ ] **P3.1 Modèle et machine à états** (en cours)
+- [x] **P3.1 Modèle et machine à états** (fait)
   - Spec : [`specs/001-p3-1-coverage-model/spec.md`](../specs/001-p3-1-coverage-model/spec.md)
     (tables, transitions par statut et par rôle, critères d'acceptation).
   - Dépend de : P2.4 ; P1.7 remplacé pour l'instant par un référentiel d'actes de départ avec
