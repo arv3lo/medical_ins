@@ -175,6 +175,17 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     expect(entries[0]!.organizationId).toBe(ostie);
   });
 
+  it('checks access before validating the reject body', async () => {
+    const affiliation = (await declare(reception)).json<{ id: string }>();
+    const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}/reject`;
+
+    const anonymous = await ctx.app.inject({ method: 'POST', url, payload: {} });
+    expect(anonymous.statusCode).toBe(401);
+    expect((await inject('POST', url, await as('medical_advisor', ostie), {})).statusCode).toBe(
+      403,
+    );
+  });
+
   it('requires a reason to reject', async () => {
     const affiliation = (await declare(reception)).json<{ id: string }>();
     const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}/reject`;

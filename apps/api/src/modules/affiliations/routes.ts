@@ -71,12 +71,14 @@ export function affiliationRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     return listInsurerAffiliations(db, orgId, status);
   });
 
+  /** `readDecision` parses the body, so it only runs once access is checked. */
   const decide = (
     request: FastifyRequest,
-    decision: { status: 'validated' } | { status: 'rejected'; rejectionReason: string },
+    readDecision: () => { status: 'validated' } | { status: 'rejected'; rejectionReason: string },
   ) => {
     const { orgId, affiliationId } = affiliationParams.parse(request.params);
     const actor = requirePermission(request, orgId, 'insured.manage');
+    const decision = readDecision();
     return db.transaction(async (tx) => {
       const { before, after } = await decideAffiliation(tx, orgId, affiliationId, decision);
       await audit(tx, {
@@ -94,11 +96,13 @@ export function affiliationRoutes(app: FastifyInstance, { db }: { db: Db }): voi
   };
 
   app.post(`${INSURER_AFFILIATIONS}/:affiliationId/validate`, (request) =>
-    decide(request, { status: 'validated' }),
+    decide(request, () => ({ status: 'validated' })),
   );
 
-  app.post(`${INSURER_AFFILIATIONS}/:affiliationId/reject`, (request) => {
-    const { reason } = rejectAffiliationInputSchema.parse(request.body ?? {});
-    return decide(request, { status: 'rejected', rejectionReason: reason });
-  });
+  app.post(`${INSURER_AFFILIATIONS}/:affiliationId/reject`, (request) =>
+    decide(request, () => ({
+      status: 'rejected',
+      rejectionReason: rejectAffiliationInputSchema.parse(request.body ?? {}).reason,
+    })),
+  );
 }
