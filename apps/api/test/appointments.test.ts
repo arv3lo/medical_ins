@@ -306,4 +306,17 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
       .where(eq(appointments.id, appointment.id));
     expect(row).toMatchObject({ status: 'cancelled', startsAt: new Date(at('09:00')) });
   });
+
+  it('does not cancel an appointment marked as arrived at the same moment', async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    const cancelled = await racing(appointment.id, 'arrived', () =>
+      inject('POST', `${base()}/${appointment.id}/status`, reception, { status: 'cancelled' }),
+    );
+    expect(cancelled.statusCode).toBe(409);
+    const [row] = await ctx.db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.id, appointment.id));
+    expect(row!.status).toBe('arrived');
+  });
 });

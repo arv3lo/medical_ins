@@ -123,7 +123,7 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     const { status } = changeAppointmentStatusInputSchema.parse(request.body);
 
     await db.transaction(async (tx) => {
-      const before = await findAppointment(tx, orgId, appointmentId);
+      const before = await lockAppointment(tx, orgId, appointmentId);
       if (!canChangeAppointmentStatus(before.status, status)) {
         throw new HttpError(409, 'Ce changement de statut n’est pas possible');
       }
