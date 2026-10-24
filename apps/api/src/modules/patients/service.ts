@@ -3,6 +3,7 @@ import { and, asc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { affiliations, organizations, patientCenterLinks, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
+import { escapeLike } from '../../lib/sql.js';
 
 const SEARCH_LIMIT = 50;
 
@@ -106,8 +107,6 @@ function matchPatient(db: Db, query: string) {
     byMemberNumber,
   );
 }
-
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export async function insertPatient(tx: Tx, organizationId: string, input: CreatePatientInput) {
   const { allowDuplicate, ...values } = input;
