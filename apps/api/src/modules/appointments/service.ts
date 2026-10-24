@@ -58,7 +58,8 @@ export async function lockAppointment(tx: Tx, organizationId: string, id: string
   return row;
 }
 
-export function listDoctors(db: Db, organizationId: string) {
+/** The active doctors of a center; `doctorId` narrows it to that one. */
+function activeDoctors(db: Db | Tx, organizationId: string, doctorId?: string) {
   return db
     .select({ id: users.id, fullName: users.fullName })
     .from(memberships)
@@ -68,19 +69,17 @@ export function listDoctors(db: Db, organizationId: string) {
         eq(memberships.organizationId, organizationId),
         eq(memberships.role, 'doctor'),
         eq(users.isActive, true),
+        doctorId ? eq(users.id, doctorId) : undefined,
       ),
-    )
-    .orderBy(users.fullName);
+    );
+}
+
+export function listDoctors(db: Db, organizationId: string) {
+  return activeDoctors(db, organizationId).orderBy(users.fullName);
 }
 
 export async function requireDoctorOf(db: Db | Tx, organizationId: string, doctorId: string) {
-  const doctor = await db.query.memberships.findFirst({
-    where: and(
-      eq(memberships.organizationId, organizationId),
-      eq(memberships.userId, doctorId),
-      eq(memberships.role, 'doctor'),
-    ),
-  });
+  const [doctor] = await activeDoctors(db, organizationId, doctorId);
   if (!doctor) throw new HttpError(400, "Ce médecin n'exerce pas dans ce centre");
 }
 

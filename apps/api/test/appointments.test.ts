@@ -319,4 +319,12 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
       .where(eq(appointments.id, appointment.id));
     expect(row!.status).toBe('arrived');
   });
+
+  it('refuses to book or reschedule to a deactivated doctor', async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    await ctx.db.update(users).set({ isActive: false }).where(eq(users.id, doctorId));
+    expect((await book({ startsAt: at('10:00') })).statusCode).toBe(400);
+    const moved = await inject('PATCH', `${base()}/${appointment.id}`, reception, { doctorId });
+    expect(moved.statusCode).toBe(400);
+  });
 });
