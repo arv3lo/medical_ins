@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Outlet } from 'react-router';
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 import { ErrorAlert } from '@/components/error-alert';
 import { Button } from '@/components/ui/button';
 import { centersWith, organizationsWith } from '@/lib/centers';
@@ -14,6 +14,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function Layout() {
   const { data: user, isPending, error, refetch } = useCurrentUser();
   const logout = useLogout();
+  const { pathname } = useLocation();
 
   if (isPending) return <p className="p-8 text-muted-foreground">Chargement…</p>;
   // Only a 401 means "logged out" (useCurrentUser maps it to null); anything else is an outage.
@@ -63,7 +64,11 @@ export function Layout() {
           Déconnexion
         </Button>
       </header>
-      <main className="mx-auto max-w-6xl p-6">
+      {/* Keyed by path so the fade replays on each page, not only on first load. */}
+      <main
+        key={pathname}
+        className="animate__animated animate__fadeIn animate__faster mx-auto max-w-6xl p-6"
+      >
         <Outlet context={user} />
       </main>
     </div>

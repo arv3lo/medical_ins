@@ -11,6 +11,18 @@ describe('Layout', () => {
     expect(render(queryClient, <Layout />)).toContain('Erreur interne');
   });
 
+  it('fades each page in', () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(ME_KEY, {
+      id: '00000000-0000-4000-8000-000000000001',
+      email: 'user@example.mg',
+      fullName: 'Test User',
+      isSuperAdmin: false,
+      memberships: [],
+    });
+    expect(render(queryClient, <Layout />)).toMatch(/<main[^>]*animate__animated animate__fadeIn/);
+  });
+
   it('shows the patients menu only to roles that can read patients', () => {
     const withUser = (user: ReturnType<typeof userWith>) => {
       const queryClient = testQueryClient();
