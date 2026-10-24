@@ -45,7 +45,7 @@ const summary = {
 export async function findDuplicates(
   db: Db | Tx,
   input: CreatePatientInput,
-): Promise<PatientSummary[]> {
+): Promise<{ duplicates: PatientSummary[]; sameNationalId: boolean }> {
   const sameCin = input.nationalId ? eq(patients.nationalId, input.nationalId) : undefined;
   const sameNameAndBirth = input.allowDuplicate
     ? undefined
@@ -54,8 +54,16 @@ export async function findDuplicates(
         eq(patients.birthDate, input.birthDate),
       );
   const match = or(sameCin, sameNameAndBirth);
-  if (!match) return [];
-  return db.select(summary).from(patients).where(match).limit(10);
+  if (!match) return { duplicates: [], sameNationalId: false };
+  const rows = await db
+    .select({ ...summary, nationalId: patients.nationalId })
+    .from(patients)
+    .where(match)
+    .limit(10);
+  return {
+    duplicates: rows.map(({ nationalId, ...rest }) => rest),
+    sameNationalId: rows.some((r) => r.nationalId === input.nationalId),
+  };
 }
 
 export function searchPatients(db: Db, organizationId: string, query = '') {

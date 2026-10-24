@@ -130,7 +130,10 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
 
     const sameCin = await create(centerB, receptionB, { ...rakoto, lastName: 'RAKOTO' });
     expect(sameCin.statusCode).toBe(409);
-    expect(sameCin.json()).toMatchObject({ duplicates: [{ id: patient.id, lastName: 'Rakoto' }] });
+    expect(sameCin.json()).toMatchObject({
+      sameNationalId: true,
+      duplicates: [{ id: patient.id, lastName: 'Rakoto' }],
+    });
 
     const sameNameAndBirth = await create(centerB, receptionB, {
       ...rakoto,
@@ -138,6 +141,7 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
       nationalId: undefined,
     });
     expect(sameNameAndBirth.statusCode).toBe(409);
+    expect(sameNameAndBirth.json()).toMatchObject({ sameNationalId: false });
 
     const link = await ctx.app.inject({
       method: 'POST',

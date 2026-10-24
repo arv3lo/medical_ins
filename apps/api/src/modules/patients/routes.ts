@@ -41,9 +41,12 @@ export function patientRoutes(app: FastifyInstance, { db }: { db: Db }): void {
     await requireHealthCenter(db, orgId);
     const input = createPatientInputSchema.parse(request.body);
 
-    const duplicates = await findDuplicates(db, input);
+    const { duplicates, sameNationalId } = await findDuplicates(db, input);
     if (duplicates.length > 0) {
-      throw new HttpError(409, 'Ce patient semble déjà enregistré', { duplicates });
+      const message = sameNationalId
+        ? 'Un patient existe déjà avec ce CIN'
+        : 'Ce patient semble déjà enregistré';
+      throw new HttpError(409, message, { duplicates, sameNationalId });
     }
 
     const patient = await db.transaction(async (tx) => {
