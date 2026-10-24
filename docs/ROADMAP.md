@@ -213,15 +213,11 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
 Statuts : brouillon → soumise → en examen → accordée (totale ou partielle) / refusée /
 complément demandé → (soumise) ; accordée → utilisée → facturée ; annulée et expirée.
 
-- [ ] **P3.1 Modèle et machine à états**
-  - Dépend de : P2.4, P1.7
-  - Livre : tables `coverage_requests` (patient, affiliation, centre, assureur, diagnostic,
-    montant estimé, montant accordé, part patient, date limite de validité, statut) et
-    `coverage_request_items` (acte, quantité, tarif) ; `coverage_request_events` (historique de
-    statut avec motif) ; fonction pure de transition dans `packages/shared` (table des
-    transitions autorisées par statut et par rôle).
-  - Acceptation : toute transition non prévue est refusée (test exhaustif de la table) ; chaque
-    transition écrit un événement et un audit dans la même transaction.
+- [ ] **P3.1 Modèle et machine à états** (en cours)
+  - Spec : [`specs/001-p3-1-coverage-model/spec.md`](../specs/001-p3-1-coverage-model/spec.md)
+    (tables, transitions par statut et par rôle, critères d'acceptation).
+  - Dépend de : P2.4 ; P1.7 remplacé pour l'instant par un référentiel d'actes de départ avec
+    tarif de référence (voir la spec, FR-015).
 
 - [ ] **P3.2 Création et soumission par le centre**
   - Dépend de : P3.1
