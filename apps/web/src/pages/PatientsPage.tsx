@@ -147,6 +147,7 @@ function NewPatientDialog({ centerId }: { centerId: string }) {
         </DialogHeader>
         {duplicates && values ? (
           <DuplicateWarning
+            message={duplicates.message}
             duplicates={duplicates.duplicates}
             pending={create.isPending || link.isPending}
             onLink={(patientId) =>

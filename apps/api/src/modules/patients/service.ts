@@ -1,11 +1,15 @@
 import type { CreatePatientInput, PatientSummary, UpdatePatientInput } from '@medical-ins/shared';
-import { and, asc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, exists, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { affiliations, organizations, patientCenterLinks, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 import { escapeLike } from '../../lib/sql.js';
 
+type Patient = typeof patients.$inferSelect;
+
 const SEARCH_LIMIT = 50;
+
+const CIN_TAKEN = 'Un patient existe déjà avec ce CIN';
 
 /** Patients only exist in health centers: any other organization id is unknown here. */
 export async function requireHealthCenter(db: Db, organizationId: string): Promise<void> {
@@ -39,13 +43,30 @@ const summary = {
   sex: patients.sex,
 };
 
+type DuplicateQuery = Pick<CreatePatientInput, 'lastName' | 'birthDate' | 'nationalId'> & {
+  allowDuplicate?: boolean;
+};
+
 /**
- * Patients that are probably the person being registered, in any center: same CIN, or same last
- * name and birth date. A CIN match is always a conflict; a name match only until confirmed.
+ * Refuses a patient that is probably someone already registered, in any center: same CIN, or same
+ * last name and birth date. A CIN match is always a conflict; a name match only until confirmed.
+ * Holds a lock on the name and birth date until the transaction ends, so that two registrations
+ * of the same person without CIN cannot both pass the check.
  */
-export async function findDuplicates(
-  db: Db | Tx,
-  input: CreatePatientInput,
+async function requireNoDuplicate(tx: Tx, input: DuplicateQuery, patientId?: string) {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(lower(${input.lastName}::text) || ${input.birthDate}::text))`,
+  );
+  const { duplicates, sameNationalId } = await findDuplicates(tx, input, patientId);
+  if (duplicates.length === 0) return;
+  const message = sameNationalId ? CIN_TAKEN : 'Ce patient semble déjà enregistré';
+  throw new HttpError(409, message, { duplicates, sameNationalId });
+}
+
+async function findDuplicates(
+  tx: Tx,
+  input: DuplicateQuery,
+  patientId?: string,
 ): Promise<{ duplicates: PatientSummary[]; sameNationalId: boolean }> {
   const sameCin = input.nationalId ? eq(patients.nationalId, input.nationalId) : undefined;
   const sameNameAndBirth = input.allowDuplicate
@@ -56,14 +77,15 @@ export async function findDuplicates(
       );
   const match = or(sameCin, sameNameAndBirth);
   if (!match) return { duplicates: [], sameNationalId: false };
-  const rows = await db
+  const notSelf = patientId ? ne(patients.id, patientId) : undefined;
+  const rows = await tx
     .select({ ...summary, nationalId: patients.nationalId })
     .from(patients)
-    .where(match)
+    .where(and(match, notSelf))
     .limit(10);
   return {
     duplicates: rows.map(({ nationalId, ...rest }) => rest),
-    sameNationalId: rows.some((r) => r.nationalId === input.nationalId),
+    sameNationalId: !!input.nationalId && rows.some((r) => r.nationalId === input.nationalId),
   };
 }
 
@@ -109,10 +131,11 @@ function matchPatient(db: Db, query: string) {
 }
 
 export async function insertPatient(tx: Tx, organizationId: string, input: CreatePatientInput) {
+  await requireNoDuplicate(tx, input);
   const { allowDuplicate, ...values } = input;
   const [patient] = await tx.insert(patients).values(values).onConflictDoNothing().returning();
   // Lost a race with another registration of the same CIN.
-  if (!patient) throw new HttpError(409, 'Un patient existe déjà avec ce CIN');
+  if (!patient) throw new HttpError(409, CIN_TAKEN);
   await linkPatient(tx, organizationId, patient.id);
   return patient;
 }
@@ -127,11 +150,27 @@ export async function linkPatient(tx: Tx, organizationId: string, patientId: str
   return link !== undefined;
 }
 
-export async function updatePatient(tx: Tx, patientId: string, input: UpdatePatientInput) {
+export async function updatePatient(tx: Tx, before: Patient, input: UpdatePatientInput) {
+  if (input.nationalId) await requireFreeNationalId(tx, before.id, input.nationalId);
+  const lastName = input.lastName ?? before.lastName;
+  const birthDate = input.birthDate ?? before.birthDate;
+  // Only a change can make the patient look like someone else: a confirmed homonym stays editable.
+  if (lastName.toLowerCase() !== before.lastName.toLowerCase() || birthDate !== before.birthDate) {
+    await requireNoDuplicate(tx, { lastName, birthDate }, before.id);
+  }
   const [patient] = await tx
     .update(patients)
     .set(input)
-    .where(eq(patients.id, patientId))
+    .where(eq(patients.id, before.id))
     .returning();
   return patient!;
+}
+
+/** A CIN belongs to one person: refuse it when another patient already has it. */
+async function requireFreeNationalId(tx: Tx, patientId: string, nationalId: string) {
+  const [taken] = await tx
+    .select({ id: patients.id })
+    .from(patients)
+    .where(and(eq(patients.nationalId, nationalId), ne(patients.id, patientId)));
+  if (taken) throw new HttpError(409, CIN_TAKEN);
 }

@@ -63,9 +63,13 @@ export function useUpdatePatient(centerId: string, patientId: string) {
 /** The duplicates a 409 from patient creation carries, if that is what the error is. */
 export function duplicatesOf(
   error: Error | null,
-): { duplicates: PatientSummary[]; sameNationalId: boolean } | null {
+): { message: string; duplicates: PatientSummary[]; sameNationalId: boolean } | null {
   if (!(error instanceof ApiError) || error.status !== 409) return null;
   const duplicates = error.details.duplicates as PatientSummary[] | undefined;
   if (!duplicates?.length) return null;
-  return { duplicates, sameNationalId: error.details.sameNationalId === true };
+  return {
+    message: error.message,
+    duplicates,
+    sameNationalId: error.details.sameNationalId === true,
+  };
 }
