@@ -140,8 +140,8 @@ export function transitionProblem(
  * price under that limit; a line at the act's reference price is not bounded here, so the server
  * checks the total, which covers every line, before writing any of them.
  */
-export const MAX_ITEM_QUANTITY = 100;
-export const MAX_UNIT_PRICE = 20_000_000;
+const MAX_ITEM_QUANTITY = 100;
+const MAX_UNIT_PRICE = 20_000_000;
 export const MAX_REQUEST_AMOUNT = 2_000_000_000;
 
 /** A line asked for; without `unitPrice`, the act's reference price applies. */
