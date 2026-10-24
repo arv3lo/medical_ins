@@ -1,22 +1,18 @@
 import { z } from 'zod';
+import { isoDateSchema, today } from './dates.js';
 
 export const SEXES = ['female', 'male'] as const;
 export type Sex = (typeof SEXES)[number];
 
 export const SEX_LABELS: Record<Sex, string> = { female: 'Femme', male: 'Homme' };
 
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format AAAA-MM-JJ')
-  .refine((value) => !Number.isNaN(Date.parse(value)), 'Date invalide');
-
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 
 const patientFields = {
   lastName: z.string().trim().min(1).max(100),
   firstNames: z.string().trim().min(1).max(200),
-  birthDate: isoDate.refine(
-    (value) => value <= new Date().toISOString().slice(0, 10),
+  birthDate: isoDateSchema.refine(
+    (value) => value <= today(),
     'La date de naissance ne peut pas être dans le futur',
   ),
   sex: z.enum(SEXES),
