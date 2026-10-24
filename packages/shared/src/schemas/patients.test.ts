@@ -22,6 +22,16 @@ describe('createPatientInputSchema', () => {
     );
   });
 
+  it('rejects a calendar date that does not exist or is before 1900', () => {
+    const accepts = (birthDate: string) =>
+      createPatientInputSchema.safeParse({ ...valid, birthDate }).success;
+    expect(accepts('2024-02-29')).toBe(true);
+    expect(accepts('1900-01-01')).toBe(true);
+    expect(accepts('2023-02-30')).toBe(false);
+    expect(accepts('2023-13-01')).toBe(false);
+    expect(accepts('1899-12-31')).toBe(false);
+  });
+
   it('only accepts a 12-digit CIN', () => {
     expect(
       createPatientInputSchema.safeParse({ ...valid, nationalId: '101 211 123 456' }).success,

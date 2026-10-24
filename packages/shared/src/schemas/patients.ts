@@ -5,10 +5,22 @@ export type Sex = (typeof SEXES)[number];
 
 export const SEX_LABELS: Record<Sex, string> = { female: 'Femme', male: 'Homme' };
 
+const MIN_YEAR = 1900;
+
+/**
+ * A real calendar day: `Date.parse` rolls 2023-02-30 over to March 2, so the date must read back
+ * unchanged once built from its parts.
+ */
+const isCalendarDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return year >= MIN_YEAR && date.toISOString().slice(0, 10) === value;
+};
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format AAAA-MM-JJ')
-  .refine((value) => !Number.isNaN(Date.parse(value)), 'Date invalide');
+  .refine(isCalendarDate, 'Date invalide');
 
 /** Absent leaves the field as it is; null clears it (an emptied form field). */
 const optionalText = (max: number) => z.string().trim().max(max).nullish();

@@ -259,4 +259,12 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ sameNationalId: false });
   });
+
+  it('answers 400, not 500, to a birth date that does not exist', async () => {
+    const response = await create(centerA, await as('reception', centerA), {
+      ...rakoto,
+      birthDate: '2023-02-30',
+    });
+    expect(response.statusCode).toBe(400);
+  });
 });
