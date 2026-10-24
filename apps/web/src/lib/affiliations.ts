@@ -1,10 +1,11 @@
-import type {
-  Affiliation,
-  AffiliationStatus,
-  CreateAffiliationInput,
-  InsuredAffiliation,
+import {
+  INSURED_PAGE_SIZE,
+  type Affiliation,
+  type AffiliationStatus,
+  type CreateAffiliationInput,
+  type InsuredAffiliation,
 } from '@medical-ins/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 export function useInsurers() {
@@ -50,11 +51,28 @@ export function useWithdrawAffiliation(centerId: string, patientId: string) {
   });
 }
 
-export function useInsuredAffiliations(insurerId: string, status: AffiliationStatus) {
-  return useQuery({
-    queryKey: ['insured', insurerId, status],
-    queryFn: () =>
-      api<InsuredAffiliation[]>(`/organizations/${insurerId}/affiliations?status=${status}`),
+export const insuredKey = (insurerId: string, status: AffiliationStatus, memberNumber: string) =>
+  ['insured', insurerId, status, memberNumber] as const;
+
+/** The API sends pages of INSURED_PAGE_SIZE: a shorter page is the last one. */
+export const nextInsuredOffset = (lastPage: InsuredAffiliation[], pages: InsuredAffiliation[][]) =>
+  lastPage.length < INSURED_PAGE_SIZE ? undefined : pages.length * INSURED_PAGE_SIZE;
+
+/** The insurer's list, page by page; `memberNumber` is a prefix, empty for all. */
+export function useInsuredAffiliations(
+  insurerId: string,
+  status: AffiliationStatus,
+  memberNumber: string,
+) {
+  return useInfiniteQuery({
+    queryKey: insuredKey(insurerId, status, memberNumber),
+    queryFn: ({ pageParam }) => {
+      const query = new URLSearchParams({ status, offset: String(pageParam) });
+      if (memberNumber) query.set('memberNumber', memberNumber);
+      return api<InsuredAffiliation[]>(`/organizations/${insurerId}/affiliations?${query}`);
+    },
+    initialPageParam: 0,
+    getNextPageParam: nextInsuredOffset,
   });
 }
 
