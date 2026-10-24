@@ -88,6 +88,10 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     expect((await declare(reception, { insurerId: otherCenter })).statusCode).toBe(404);
   });
 
+  it('answers 400, not 500, for a start date that does not exist', async () => {
+    expect((await declare(reception, { startsOn: '2023-02-30' })).statusCode).toBe(400);
+  });
+
   it('keeps a member number unique among the holders of one insurer', async () => {
     await declare(reception);
     const other = await ctx.app.inject({
