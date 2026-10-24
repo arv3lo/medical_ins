@@ -153,6 +153,70 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: transitions', () => {
     });
   });
 
+  describe('the center completes the cycle', () => {
+    const granted = () =>
+      f.requestAt(
+        [f.doctor, { to: 'submitted' }],
+        [f.advisor, { to: 'under_review' }, f.insurer],
+        [f.advisor, { to: 'granted', grantedAmount: 70000, validUntil: '2999-12-31' }, f.insurer],
+      );
+
+    it('answers a request for more information and submits again', async () => {
+      const id = await f.underReview();
+      await decide(id, { to: 'info_requested', reason: 'Ordonnance manquante' });
+      const patch = await f.inject('PATCH', `${f.base()}/${id}`, f.doctor, {
+        items: [{ actCode: 'ECG', quantity: 1 }],
+      });
+      expect(patch.statusCode).toBe(200);
+      expect((await f.move(id, f.doctor, { to: 'submitted' })).statusCode).toBe(200);
+      const history = (await f.events(id)).map((e) => e.toStatus);
+      expect(history).toEqual([
+        'draft',
+        'submitted',
+        'under_review',
+        'info_requested',
+        'submitted',
+      ]);
+    });
+
+    it('cancels a draft freely, a sent request only with a reason, and for good', async () => {
+      const draftId = await f.draft();
+      expect((await f.move(draftId, f.doctor, { to: 'cancelled' })).statusCode).toBe(200);
+
+      const sent = [await f.submitted(), await f.underReview()];
+      const sentBack = await f.underReview();
+      await decide(sentBack, { to: 'info_requested', reason: 'Préciser' });
+      for (const id of [...sent, sentBack]) {
+        expect((await f.move(id, f.doctor, { to: 'cancelled' })).statusCode).toBe(400);
+        const cancel = await f.move(id, f.doctor, { to: 'cancelled', reason: 'Patient transféré' });
+        expect(cancel.statusCode).toBe(200);
+      }
+      expect((await f.move(draftId, f.doctor, { to: 'submitted' })).statusCode).toBe(409);
+    });
+
+    it('marks a grant used until its validity date, not after', async () => {
+      const id = await granted();
+      expect((await f.move(id, f.doctor, { to: 'used' })).statusCode).toBe(200);
+
+      const late = await granted();
+      await ctx.db
+        .update(coverageRequests)
+        .set({ validUntil: '2000-01-01' })
+        .where(eq(coverageRequests.id, late));
+      const response = await f.move(late, f.doctor, { to: 'used' });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toMatch(/expiré/);
+    });
+
+    it('leaves expiry and billing to the system, out of reach over HTTP', async () => {
+      const id = await granted();
+      expect((await f.move(id, f.doctor, { to: 'expired' })).statusCode).toBe(409);
+      expect((await decide(id, { to: 'expired' })).statusCode).toBe(409);
+      await f.move(id, f.doctor, { to: 'used' });
+      expect((await f.move(id, f.doctor, { to: 'billed' })).statusCode).toBe(409);
+    });
+  });
+
   describe('history and audit', () => {
     it('writes nothing when the audit entry fails: status, event and audit go together', async () => {
       const id = await f.draft();
