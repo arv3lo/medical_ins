@@ -9,13 +9,13 @@ Conventions du projet :
 
 Codes de réponse communs :
 
-| Code | Quand                                                                                                                           |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | corps invalide, ou condition non remplie (affiliation inactive, montant hors bornes, motif manquant…)                           |
-| 401  | pas de session                                                                                                                  |
-| 403  | pas la permission dans l'organisation de l'URL                                                                                  |
-| 404  | demande, patient, affiliation, acte ou code introuvable, ou appartenant à une autre organisation ; brouillon vu par un assureur |
-| 409  | transition impossible depuis le statut actuel, y compris après une transition concurrente                                       |
+| Code | Quand                                                                                                                                          |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | corps invalide, ou condition non remplie (affiliation inactive, montant hors bornes, motif manquant…)                                          |
+| 401  | pas de session                                                                                                                                 |
+| 403  | pas la permission dans l'organisation de l'URL                                                                                                 |
+| 404  | demande, patient, affiliation, acte ou code introuvable, ou appartenant à une autre organisation ; demande jamais soumise, vue par un assureur |
+| 409  | transition impossible depuis le statut actuel, y compris après une transition concurrente                                                      |
 
 Chaque écriture répond avec les identifiants seulement ; le client relit par le GET, qui audite la
 lecture.
@@ -43,9 +43,11 @@ lecture.
   }
   ```
 
-  - `items` : de 1 à 30 lignes ; `quantity` est un entier ≥ 1 ;
+  - `items` : de 1 à 30 lignes ; `quantity` est un entier de 1 à 100 ;
   - `unitPrice` est facultatif (le tarif de référence par défaut) ; s'il est fourni, c'est un
-    entier > 0.
+    entier de 1 à 20 000 000 ;
+  - le montant estimé ne dépasse pas 2 000 000 000 Ar, sinon 400 (les montants sont stockés en
+    entiers 32 bits).
 
 - Règles :
   - le patient est rattaché au centre ;
@@ -83,7 +85,7 @@ lecture.
   - `center` si l'appelant a `coverage_request.create` dans `:orgId` et que la demande est de ce
     centre ;
   - `insurer` s'il a `coverage_request.decide` dans `:orgId` et que la demande est adressée à cet
-    assureur (et n'est pas un brouillon) ;
+    assureur (et lui a été soumise au moins une fois) ;
   - l'acteur `system` n'est jamais accepté ici.
 - Traitement :
   1. verrou sur la demande ;
@@ -151,7 +153,7 @@ lecture.
 
 - **Assureur** (`coverage_request.decide`) : la même forme. Tout ce qu'elle contient sert la décision
   (FR-012), y compris le nom du médecin demandeur. Elle est sélectionnée colonne par colonne,
-  jamais par une table entière. 404 sur un brouillon.
+  jamais par une table entière. 404 sur une demande jamais soumise (brouillon, ou brouillon annulé).
 - Audit : `medical_record.read` (`entityType: 'coverage_request'`), dans la même transaction que
   la lecture.
 
@@ -159,8 +161,8 @@ lecture.
 
 `GET /api/organizations/:orgId/coverage-requests?status=&patientId=&offset=`
 
-- **Centre** : les demandes du centre. **Assureur** : celles qui lui sont adressées, hors
-  brouillons.
+- **Centre** : les demandes du centre. **Assureur** : celles qui lui ont été soumises au
+  moins une fois, quel que soit leur statut actuel.
 - Réponse : une liste de demandes, de la même forme des deux côtés, sans diagnostic ni lignes :
   `id`, `status`, `estimatedAmount`, `grantedAmount`, `validUntil`, `updatedAt`, plus
   `patient: { lastName, firstNames }`, `center: { name }` et `insurer: { name }`. Pages de 50,

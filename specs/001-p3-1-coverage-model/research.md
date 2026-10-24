@@ -120,8 +120,10 @@ Chaque décision ci-dessous réutilise un patron du dépôt plutôt que d'en inv
   - **côté centre** : `coverage_request.create` dans le centre, et `center_id = orgId`. Les
     médecins du centre voient toutes les demandes du centre, brouillons compris, avec le
     diagnostic ;
-  - **côté assureur** : `coverage_request.decide` dans l'assureur, `insurer_id = orgId`, et statut
-    différent de `brouillon`. Un brouillon n'existe pas pour l'assureur : 404 ;
+  - **côté assureur** : `coverage_request.decide` dans l'assureur, `insurer_id = orgId`, et
+    l'historique montre que la demande lui a été soumise au moins une fois. Une demande jamais
+    soumise (brouillon, ou brouillon annulé) n'existe pas pour l'assureur : 404 (revue PR #12,
+    constat 1) ;
   - **projection assureur explicite** (principe III) :
     - identité du patient : nom, prénoms, date de naissance, CIN ;
     - affiliation : numéro, qualité, régime, dates, statut actuel ;
