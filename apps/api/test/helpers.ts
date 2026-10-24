@@ -1,9 +1,10 @@
+import type { Role } from '@medical-ins/shared';
 import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { createDb, type Db } from '../src/db/client.js';
 import { runMigrations } from '../src/db/migrate.js';
-import { users } from '../src/db/schema.js';
+import { memberships, users } from '../src/db/schema.js';
 import { loadEnv } from '../src/env.js';
 import { hashPassword } from '../src/lib/password.js';
 
@@ -88,4 +89,17 @@ export async function login(app: FastifyInstance, email: string, password: strin
   if (response.statusCode !== 200) throw new Error(`login failed: ${response.body}`);
   const sid = response.cookies.find((c) => c.name === 'sid');
   return { cookie: `sid=${sid!.value}` };
+}
+
+/** Creates an account with `role` in `organizationId`, logs it in and returns its Cookie header. */
+export async function memberCookie(
+  app: FastifyInstance,
+  db: Db,
+  role: Role,
+  organizationId: string,
+): Promise<string> {
+  const email = `${role}.${organizationId.slice(0, 8)}@example.mg`;
+  const user = await createUser(db, { email, password: 'pass-12345' });
+  await db.insert(memberships).values({ userId: user.id, organizationId, role });
+  return (await login(app, email, 'pass-12345')).cookie;
 }
