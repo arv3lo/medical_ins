@@ -51,7 +51,7 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     inject('POST', base(), cookie, { patientId, reason: 'Fièvre depuis 3 jours', ...payload });
 
   async function draft(cookie = doctor) {
-    return (await start(cookie)).json<Consultation>();
+    return (await start(cookie)).json<{ id: string }>();
   }
 
   async function signed() {
@@ -125,7 +125,11 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
   it('lets a doctor open a draft consultation for a patient of the center, audited', async () => {
     const response = await start();
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
+    // Writes answer with ids only: the content is read back through the audited GET.
+    const { id } = response.json<{ id: string }>();
+    expect(response.json()).toEqual({ id });
+    const read = await inject('GET', `${base()}/${id}`, doctor);
+    expect(read.json()).toMatchObject({
       reason: 'Fièvre depuis 3 jours',
       signedAt: null,
       diagnoses: [],
@@ -157,7 +161,9 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       ],
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    expect(response.json()).toEqual({ id: consultation.id });
+    const read = await inject('GET', `${base()}/${consultation.id}`, doctor);
+    expect(read.json()).toMatchObject({
       vitals: { temperatureC: 39.2, heartRate: 104 },
       diagnoses: [
         { code: 'B54', label: 'Paludisme, sans précision', primary: true },
@@ -165,9 +171,10 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       ],
     });
 
-    const replaced = await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
+    await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
       diagnoses: [{ code: 'J06.9', primary: true }],
     });
+    const replaced = await inject('GET', `${base()}/${consultation.id}`, doctor);
     expect(replaced.json<Consultation>().diagnoses.map((d) => d.code)).toEqual(['J06.9']);
     expect(await actions('consultation.update')).toHaveLength(2);
   });
@@ -200,7 +207,7 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     });
     const sign = await inject('POST', `${base()}/${consultation.id}/sign`, doctor);
     expect(sign.statusCode).toBe(200);
-    expect(sign.json<Consultation>().signedAt).not.toBeNull();
+    expect(sign.json()).toEqual({ id: consultation.id, signedAt: expect.any(String) });
     expect(await actions('consultation.sign')).toHaveLength(1);
 
     const edit = await inject('PATCH', `${base()}/${consultation.id}`, doctor, { notes: 'x' });
@@ -350,6 +357,13 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       content: 'Goutte épaisse positive',
     });
     expect(added.statusCode).toBe(201);
+    // Only the new addendum: the rest of the record is read back through the audited GET.
+    expect(added.json()).toEqual({
+      id: expect.any(String),
+      content: 'Goutte épaisse positive',
+      createdAt: expect.any(String),
+      author: { fullName: expect.any(String) },
+    });
     const read = await inject('GET', `${base()}/${consultation.id}`, doctor);
     expect(read.json<Consultation>().addenda).toMatchObject([
       { content: 'Goutte épaisse positive' },
