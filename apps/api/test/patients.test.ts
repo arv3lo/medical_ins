@@ -55,6 +55,19 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
   const get = (url: string, cookie: string) =>
     ctx.app.inject({ method: 'GET', url, headers: { cookie } });
 
+  const update = (
+    orgId: string,
+    patientId: string,
+    cookie: string,
+    payload: Record<string, unknown>,
+  ) =>
+    ctx.app.inject({
+      method: 'PATCH',
+      url: `/api/organizations/${orgId}/patients/${patientId}`,
+      headers: { cookie },
+      payload,
+    });
+
   it('lets reception register a patient, audited in the center', async () => {
     const reception = await as('reception', centerA);
     const response = await create(centerA, reception);
@@ -206,5 +219,17 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
         (await get(`/api/organizations/${centerA}/patients/${patient.id}`, cookie)).statusCode,
       ).toBe(200);
     }
+  });
+
+  it('refuses to give a patient the CIN of another patient', async () => {
+    const reception = await as('reception', centerA);
+    await create(centerA, reception);
+    const other = (
+      await create(centerA, reception, { ...rakoto, lastName: 'Rabe', nationalId: '202211123456' })
+    ).json<{ id: string }>();
+
+    const response = await update(centerA, other.id, reception, { nationalId: rakoto.nationalId });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ message: 'Un patient existe déjà avec ce CIN' });
   });
 });

@@ -1,10 +1,12 @@
 import type { CreatePatientInput, PatientSummary, UpdatePatientInput } from '@medical-ins/shared';
-import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { organizations, patientCenterLinks, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 
 const SEARCH_LIMIT = 50;
+
+export const CIN_TAKEN = 'Un patient existe déjà avec ce CIN';
 
 /** Patients only exist in health centers: any other organization id is unknown here. */
 export async function requireHealthCenter(db: Db, organizationId: string): Promise<void> {
@@ -97,7 +99,7 @@ export async function insertPatient(tx: Tx, organizationId: string, input: Creat
   const { allowDuplicate, ...values } = input;
   const [patient] = await tx.insert(patients).values(values).onConflictDoNothing().returning();
   // Lost a race with another registration of the same CIN.
-  if (!patient) throw new HttpError(409, 'Un patient existe déjà avec ce CIN');
+  if (!patient) throw new HttpError(409, CIN_TAKEN);
   await linkPatient(tx, organizationId, patient.id);
   return patient;
 }
@@ -113,10 +115,20 @@ export async function linkPatient(tx: Tx, organizationId: string, patientId: str
 }
 
 export async function updatePatient(tx: Tx, patientId: string, input: UpdatePatientInput) {
+  if (input.nationalId) await requireFreeNationalId(tx, patientId, input.nationalId);
   const [patient] = await tx
     .update(patients)
     .set(input)
     .where(eq(patients.id, patientId))
     .returning();
   return patient!;
+}
+
+/** A CIN belongs to one person: refuse it when another patient already has it. */
+async function requireFreeNationalId(tx: Tx, patientId: string, nationalId: string) {
+  const [taken] = await tx
+    .select({ id: patients.id })
+    .from(patients)
+    .where(and(eq(patients.nationalId, nationalId), ne(patients.id, patientId)));
+  if (taken) throw new HttpError(409, CIN_TAKEN);
 }

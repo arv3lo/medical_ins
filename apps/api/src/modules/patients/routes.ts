@@ -12,6 +12,7 @@ import { audit } from '../../lib/audit.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 import { requirePermission } from '../../plugins/auth.js';
 import {
+  CIN_TAKEN,
   findDuplicates,
   insertPatient,
   linkPatient,
@@ -43,9 +44,7 @@ export function patientRoutes(app: FastifyInstance, { db }: { db: Db }): void {
 
     const { duplicates, sameNationalId } = await findDuplicates(db, input);
     if (duplicates.length > 0) {
-      const message = sameNationalId
-        ? 'Un patient existe déjà avec ce CIN'
-        : 'Ce patient semble déjà enregistré';
+      const message = sameNationalId ? CIN_TAKEN : 'Ce patient semble déjà enregistré';
       throw new HttpError(409, message, { duplicates, sameNationalId });
     }
 
