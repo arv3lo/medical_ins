@@ -1,9 +1,16 @@
-import { SEX_LABELS, type CurrentUser, type Patient } from '@medical-ins/shared';
+import {
+  MAX_APPOINTMENT_RANGE_DAYS,
+  SEX_LABELS,
+  type CurrentUser,
+  type Patient,
+} from '@medical-ins/shared';
 import { ArrowLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
 import { today } from '@medical-ins/shared';
 import { AffiliationsTable } from '@/components/affiliations/affiliations-table';
+import { AppointmentsTable } from '@/components/appointments/appointments-table';
+import { BookAppointmentDialog } from '@/components/appointments/book-appointment-dialog';
 import { DeclareAffiliationDialog } from '@/components/affiliations/declare-affiliation-dialog';
 import { ErrorAlert } from '@/components/error-alert';
 import { PatientForm } from '@/components/patients/patient-form';
@@ -11,14 +18,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
 import { usePatientAffiliations, useWithdrawAffiliation } from '@/lib/affiliations';
-import { formatDate } from '@/lib/format';
+import { useAppointments } from '@/lib/appointments';
+import { addDays, daysRange, formatDate, localToday } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
-import { useCenterParam } from './PatientsPage';
+import { useCenterParam } from '@/lib/use-center-param';
 
 export function PatientPage() {
   const user = useOutletContext<CurrentUser>();
   const { patientId = '' } = useParams();
-  const { centerId } = useCenterParam(user);
+  const { centerId } = useCenterParam(user, 'patient.read_admin');
 
   if (!centerId) return <p className="text-muted-foreground">Aucun centre accessible.</p>;
   return <PatientDetails user={user} centerId={centerId} patientId={patientId} />;
@@ -69,6 +77,13 @@ function PatientDetails({
             )}
           </CardContent>
         </Card>
+      )}
+      {patient.data && canIn(user, centerId, 'appointment.read') && (
+        <AppointmentsCard
+          centerId={centerId}
+          patient={patient.data}
+          canManage={canIn(user, centerId, 'appointment.manage')}
+        />
       )}
       {patient.data && (
         <AffiliationsCard
@@ -159,5 +174,45 @@ function EditPatient({
         onSubmit={(values) => update.mutate(values, { onSuccess: onDone })}
       />
     </div>
+  );
+}
+
+function AppointmentsCard({
+  centerId,
+  patient,
+  canManage,
+}: {
+  centerId: string;
+  patient: Patient;
+  canManage: boolean;
+}) {
+  // Last month and the next two: the widest range one list may cover.
+  const range = daysRange(addDays(localToday(), -30), MAX_APPOINTMENT_RANGE_DAYS);
+  const appointments = useAppointments(centerId, { ...range, patientId: patient.id });
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Rendez-vous</CardTitle>
+          <p className="text-sm text-muted-foreground">Le mois passé et les deux prochains</p>
+        </div>
+        {canManage && <BookAppointmentDialog centerId={centerId} patient={patient} />}
+      </CardHeader>
+      <CardContent>
+        {appointments.error && <ErrorAlert error={appointments.error} />}
+        {appointments.data?.length === 0 && (
+          <p className="text-muted-foreground">Aucun rendez-vous.</p>
+        )}
+        {appointments.data && appointments.data.length > 0 && (
+          <AppointmentsTable
+            centerId={centerId}
+            appointments={appointments.data}
+            canManage={canManage}
+            showDate
+            showPatient={false}
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }

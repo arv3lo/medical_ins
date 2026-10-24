@@ -37,6 +37,11 @@ export function Layout() {
           <NavLink to="/" end className={navLinkClass}>
             Accueil
           </NavLink>
+          {centersWith(user, 'appointment.read').length > 0 && (
+            <NavLink to="/agenda" className={navLinkClass}>
+              Agenda
+            </NavLink>
+          )}
           {centersWith(user, 'patient.read_admin').length > 0 && (
             <NavLink to="/patients" className={navLinkClass}>
               Patients

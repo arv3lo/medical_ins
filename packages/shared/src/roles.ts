@@ -43,6 +43,7 @@ export const PERMISSIONS = [
   'patient.create',
   'patient.update',
   'patient.read_admin',
+  'appointment.read',
   'appointment.manage',
   'medical_record.read',
   'medical_record.write',
@@ -61,14 +62,21 @@ export type Permission = (typeof PERMISSIONS)[number];
  */
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   center_admin: ['org.members.manage', 'patient.read_admin'],
-  reception: ['patient.create', 'patient.update', 'patient.read_admin', 'appointment.manage'],
+  reception: [
+    'patient.create',
+    'patient.update',
+    'patient.read_admin',
+    'appointment.read',
+    'appointment.manage',
+  ],
   doctor: [
     'patient.read_admin',
+    'appointment.read',
     'medical_record.read',
     'medical_record.write',
     'coverage_request.create',
   ],
-  nurse: ['patient.read_admin', 'medical_record.read'],
+  nurse: ['patient.read_admin', 'appointment.read', 'medical_record.read'],
   pharmacist: ['patient.read_admin', 'prescription.dispense'],
   billing: ['patient.read_admin', 'invoice.manage'],
   insurer_manager: ['org.members.manage', 'insured.manage'],

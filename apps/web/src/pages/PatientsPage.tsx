@@ -1,7 +1,7 @@
 import { SEX_LABELS, type CreatePatientInput, type CurrentUser } from '@medical-ins/shared';
 import { PlusIcon } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router';
+import { Link, useNavigate, useOutletContext } from 'react-router';
 import { CenterPicker } from '@/components/center-picker';
 import { ErrorAlert } from '@/components/error-alert';
 import { DuplicateWarning } from '@/components/patients/duplicate-warning';
@@ -24,23 +24,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { canIn, centersWith } from '@/lib/centers';
+import { canIn } from '@/lib/centers';
 import { formatDate } from '@/lib/format';
 import { duplicatesOf, useCreatePatient, useLinkPatient, usePatients } from '@/lib/patients';
-
-/** The center a page is about: `?centre=` when the user may use it, else their first center. */
-export function useCenterParam(user: CurrentUser) {
-  const [params, setParams] = useSearchParams();
-  const centers = centersWith(user, 'patient.read_admin');
-  const requested = params.get('centre');
-  const centerId = centers.find((c) => c.id === requested)?.id ?? centers[0]?.id;
-  const setCenterId = (id: string) => setParams({ centre: id });
-  return { centers, centerId, setCenterId };
-}
+import { useCenterParam } from '@/lib/use-center-param';
 
 export function PatientsPage() {
   const user = useOutletContext<CurrentUser>();
-  const { centers, centerId, setCenterId } = useCenterParam(user);
+  const { centers, centerId, setCenterId } = useCenterParam(user, 'patient.read_admin');
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query.trim());
 

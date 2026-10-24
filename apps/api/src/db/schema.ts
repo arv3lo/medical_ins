@@ -1,5 +1,6 @@
 import {
   AFFILIATION_STATUSES,
+  APPOINTMENT_STATUSES,
   HOLDER_STATUSES,
   ORGANIZATION_TYPES,
   ROLES,
@@ -12,6 +13,7 @@ import {
   check,
   date,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -28,6 +30,7 @@ export const role = pgEnum('role', ROLES);
 export const sex = pgEnum('sex', SEXES);
 export const holderStatus = pgEnum('holder_status', HOLDER_STATUSES);
 export const affiliationStatus = pgEnum('affiliation_status', AFFILIATION_STATUSES);
+export const appointmentStatus = pgEnum('appointment_status', APPOINTMENT_STATUSES);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -159,6 +162,38 @@ export const affiliations = pgTable(
     index().on(t.patientId),
     index().on(t.insurerId, t.status),
     check('affiliations_dates_check', sql`${t.endsOn} IS NULL OR ${t.endsOn} >= ${t.startsOn}`),
+  ],
+);
+
+/**
+ * A slot with a doctor. An exclusion constraint (migration 0006, the only home of that rule) keeps
+ * a doctor's held slots (scheduled, arrived, completed) from overlapping; cancelled and no-show
+ * appointments free theirs. `ends_at` is stored so the range is an immutable expression.
+ */
+export const appointments = pgTable(
+  'appointments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    doctorId: uuid('doctor_id')
+      .notNull()
+      .references(() => users.id),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    durationMinutes: integer('duration_minutes').notNull(),
+    reason: text('reason'),
+    status: appointmentStatus('status').notNull().default('scheduled'),
+    ...timestamps,
+  },
+  (t) => [
+    index().on(t.organizationId, t.startsAt),
+    index().on(t.patientId),
+    check('appointments_ends_after_start', sql`${t.endsAt} > ${t.startsAt}`),
   ],
 );
 
