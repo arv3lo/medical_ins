@@ -83,8 +83,9 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
   - Dépend de : P0
   - Livre : `DELETE /api/organizations/:id/members/:membershipId`, écran « Membres » pour
     `center_admin` / `insurer_manager` (liste, ajout d'un compte existant, retrait).
-  - Acceptation : un admin ne peut pas retirer son propre dernier rôle d'admin ; un admin d'un
-    centre ne voit pas les membres d'un autre centre ; retrait audité.
+  - Acceptation : une organisation garde toujours au moins un admin, quel que soit l'auteur du
+    retrait (super admin compris) ; un admin d'un centre ne voit pas les membres d'un autre
+    centre ; retrait audité.
 
 - [ ] **P1.4 Organisation active dans l'interface**
   - Dépend de : P1.3
