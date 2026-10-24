@@ -84,6 +84,18 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   insurer_accountant: ['invoice.review'],
 };
 
+/** Medical content: reachable only through a care role, never through super admin status. */
+const MEDICAL_PERMISSIONS: readonly Permission[] = [
+  'medical_record.read',
+  'medical_record.write',
+  'prescription.dispense',
+];
+
+/** Whether being super admin is enough for `permission`, without a role in the organization. */
+export function superAdminBypasses(permission: Permission): boolean {
+  return !MEDICAL_PERMISSIONS.includes(permission);
+}
+
 export function hasPermission(roles: readonly Role[], permission: Permission): boolean {
   return roles.some((role) => ROLE_PERMISSIONS[role].includes(permission));
 }

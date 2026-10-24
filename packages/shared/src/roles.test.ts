@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasPermission, isRoleAllowedFor } from './roles.js';
+import { hasPermission, isRoleAllowedFor, superAdminBypasses } from './roles.js';
 
 describe('roles', () => {
   it('keeps medical content away from administrative roles', () => {
@@ -32,5 +32,15 @@ describe('roles', () => {
     expect(hasPermission(['reception'], 'appointment.read')).toBe(true);
     expect(hasPermission(['doctor'], 'appointment.manage')).toBe(false);
     expect(hasPermission(['billing'], 'appointment.read')).toBe(false);
+  });
+});
+
+describe('superAdminBypasses', () => {
+  it('lets the super admin administer, but never reach medical content', () => {
+    expect(superAdminBypasses('org.members.manage')).toBe(true);
+    expect(superAdminBypasses('patient.read_admin')).toBe(true);
+    expect(superAdminBypasses('medical_record.read')).toBe(false);
+    expect(superAdminBypasses('medical_record.write')).toBe(false);
+    expect(superAdminBypasses('prescription.dispense')).toBe(false);
   });
 });
