@@ -1,4 +1,9 @@
-import { SEX_LABELS, type CurrentUser, type Patient } from '@medical-ins/shared';
+import {
+  MAX_APPOINTMENT_RANGE_DAYS,
+  SEX_LABELS,
+  type CurrentUser,
+  type Patient,
+} from '@medical-ins/shared';
 import { ArrowLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
@@ -14,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
 import { usePatientAffiliations } from '@/lib/affiliations';
 import { useAppointments } from '@/lib/appointments';
-import { formatDate } from '@/lib/format';
+import { addDays, daysRange, formatDate, localToday } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
 import { useCenterParam } from '@/lib/use-center-param';
 
@@ -173,11 +178,16 @@ function AppointmentsCard({
   patient: Patient;
   canManage: boolean;
 }) {
-  const appointments = useAppointments(centerId, { patientId: patient.id });
+  // Last month and the next two: the widest range one list may cover.
+  const range = daysRange(addDays(localToday(), -30), MAX_APPOINTMENT_RANGE_DAYS);
+  const appointments = useAppointments(centerId, { ...range, patientId: patient.id });
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Rendez-vous</CardTitle>
+        <div>
+          <CardTitle>Rendez-vous</CardTitle>
+          <p className="text-sm text-muted-foreground">Le mois passé et les deux prochains</p>
+        </div>
         {canManage && <BookAppointmentDialog centerId={centerId} patient={patient} />}
       </CardHeader>
       <CardContent>

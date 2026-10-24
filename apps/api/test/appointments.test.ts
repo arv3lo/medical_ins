@@ -6,6 +6,10 @@ import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helper
 
 /** Far enough ahead that "in the past" never applies by accident. */
 const at = (time: string) => `2099-11-03T${time}:00+03:00`;
+const range = (from: string, to: string) =>
+  `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+/** November 2099, around the appointments booked with `at`. */
+const NOVEMBER = range('2099-11-01T00:00:00+03:00', '2099-12-01T00:00:00+03:00');
 
 describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
   let ctx: Awaited<ReturnType<typeof setupTestApp>>;
@@ -191,8 +195,17 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
 
   it('lists the appointments of one patient', async () => {
     await book();
-    const list = await inject('GET', `${base()}?patientId=${patientId}`, reception);
+    const list = await inject('GET', `${base()}?${NOVEMBER}&patientId=${patientId}`, reception);
     expect(list.json()).toHaveLength(1);
+  });
+
+  it('only lists a bounded range, never the whole history', async () => {
+    await book();
+    expect((await inject('GET', `${base()}?patientId=${patientId}`, reception)).statusCode).toBe(
+      400,
+    );
+    const year = range('2099-01-01T00:00:00+03:00', '2100-01-01T00:00:00+03:00');
+    expect((await inject('GET', `${base()}?${year}`, reception)).statusCode).toBe(400);
   });
 
   const statusOf = (id: string) => (value: string) =>
@@ -281,7 +294,7 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
     ).toBe(404);
     const listed = await inject(
       'GET',
-      `/api/organizations/${otherCenter}/appointments?patientId=${patientId}`,
+      `/api/organizations/${otherCenter}/appointments?${NOVEMBER}&patientId=${patientId}`,
       receptionB,
     );
     expect(listed.json()).toEqual([]);

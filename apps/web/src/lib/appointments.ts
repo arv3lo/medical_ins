@@ -1,12 +1,16 @@
-import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@medical-ins/shared';
+import type {
+  Appointment,
+  AppointmentQuery,
+  AppointmentStatus,
+  CreateAppointmentInput,
+} from '@medical-ins/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 const base = (centerId: string) => `/organizations/${centerId}/appointments`;
 
-type Filter = { from?: string; to?: string; doctorId?: string; patientId?: string };
-
-export function useAppointments(centerId: string, filter: Filter) {
+/** The appointments of a center in [from, to): the API refuses a range longer than a quarter. */
+export function useAppointments(centerId: string, filter: AppointmentQuery) {
   const params = new URLSearchParams(
     Object.entries(filter).filter((entry): entry is [string, string] => Boolean(entry[1])),
   );

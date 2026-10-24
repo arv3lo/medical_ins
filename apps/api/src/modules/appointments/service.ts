@@ -1,4 +1,4 @@
-import type { AppointmentStatus } from '@medical-ins/shared';
+import type { AppointmentQuery, AppointmentStatus } from '@medical-ins/shared';
 import { and, asc, eq, getTableColumns, gte, lt } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { appointments, memberships, patients, users } from '../../db/schema.js';
@@ -18,17 +18,13 @@ function selectAppointments(db: Db | Tx) {
     .innerJoin(users, eq(users.id, appointments.doctorId));
 }
 
-export function listAppointments(
-  db: Db,
-  organizationId: string,
-  filter: { from?: string; to?: string; doctorId?: string; patientId?: string },
-) {
+export function listAppointments(db: Db, organizationId: string, filter: AppointmentQuery) {
   return selectAppointments(db)
     .where(
       and(
         eq(appointments.organizationId, organizationId),
-        filter.from ? gte(appointments.startsAt, new Date(filter.from)) : undefined,
-        filter.to ? lt(appointments.startsAt, new Date(filter.to)) : undefined,
+        gte(appointments.startsAt, new Date(filter.from)),
+        lt(appointments.startsAt, new Date(filter.to)),
         filter.doctorId ? eq(appointments.doctorId, filter.doctorId) : undefined,
         filter.patientId ? eq(appointments.patientId, filter.patientId) : undefined,
       ),

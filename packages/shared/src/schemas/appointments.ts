@@ -78,12 +78,25 @@ export const changeAppointmentStatusInputSchema = z.object({
   status: z.enum(APPOINTMENT_STATUSES),
 });
 
-export const appointmentQuerySchema = z.object({
-  from: instantSchema.optional(),
-  to: instantSchema.optional(),
-  doctorId: z.string().uuid().optional(),
-  patientId: z.string().uuid().optional(),
-});
+/** The longest range one list may cover: a quarter, enough for a patient's recent and next visits. */
+export const MAX_APPOINTMENT_RANGE_DAYS = 92;
+
+/** A list always covers a bounded range, [from, to), so it never returns a center's whole history. */
+export const appointmentQuerySchema = z
+  .object({
+    from: instantSchema,
+    to: instantSchema,
+    doctorId: z.string().uuid().optional(),
+    patientId: z.string().uuid().optional(),
+  })
+  .refine(
+    ({ from, to }) => {
+      const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+      return days > 0 && days <= MAX_APPOINTMENT_RANGE_DAYS;
+    },
+    { message: `Période de ${MAX_APPOINTMENT_RANGE_DAYS} jours au plus`, path: ['to'] },
+  );
+export type AppointmentQuery = z.infer<typeof appointmentQuerySchema>;
 
 export type Appointment = {
   id: string;

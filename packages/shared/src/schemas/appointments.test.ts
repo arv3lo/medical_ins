@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appointmentQuerySchema,
   canChangeAppointmentStatus,
   createAppointmentInputSchema,
   isStatusChangeDue,
@@ -65,5 +66,22 @@ describe('isStatusChangeDue', () => {
 
   it('cancels at any time', () => {
     expect(isStatusChangeDue('cancelled', startsAt, minutesFromStart(-60 * 24 * 30))).toBe(true);
+  });
+});
+
+describe('appointmentQuerySchema', () => {
+  const from = '2026-11-01T00:00:00+03:00';
+  const parse = (query: Record<string, string>) => appointmentQuerySchema.safeParse(query).success;
+
+  it('requires a range', () => {
+    expect(parse({})).toBe(false);
+    expect(parse({ from })).toBe(false);
+    expect(parse({ from, to: '2026-11-08T00:00:00+03:00' })).toBe(true);
+  });
+
+  it('keeps the range forward and at most 92 days long', () => {
+    expect(parse({ from, to: from })).toBe(false);
+    expect(parse({ from, to: '2027-02-01T00:00:00+03:00' })).toBe(true);
+    expect(parse({ from, to: '2027-02-01T00:00:01+03:00' })).toBe(false);
   });
 });

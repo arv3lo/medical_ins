@@ -14,12 +14,20 @@ export function toInstant(date: string, time: string): string {
   return new Date(`${date}T${time}`).toISOString();
 }
 
+/** The instants where local day `date` starts and where the `days`-th day after it ends. */
+export function daysRange(date: string, days: number): { from: string; to: string } {
+  const from = new Date(`${date}T00:00`);
+  return { from: from.toISOString(), to: new Date(`${addDays(date, days)}T00:00`).toISOString() };
+}
+
 /** The instants where a local day starts and the next one starts. */
-export function dayRange(date: string): { from: string; to: string } {
-  const start = new Date(`${date}T00:00`);
-  const next = new Date(start);
-  next.setDate(start.getDate() + 1);
-  return { from: start.toISOString(), to: next.toISOString() };
+export const dayRange = (date: string) => daysRange(date, 1);
+
+/** A local date (AAAA-MM-JJ) moved by `days` whole days. */
+export function addDays(date: string, days: number): string {
+  const moment = new Date(`${date}T12:00`);
+  moment.setDate(moment.getDate() + days);
+  return localDateOf(moment);
 }
 
 /** The local calendar date of a moment, AAAA-MM-JJ. */
