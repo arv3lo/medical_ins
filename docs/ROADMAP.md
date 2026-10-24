@@ -52,7 +52,7 @@ La V1 utilisable par un premier centre pilote = P1 à P4 + les items P6 marqués
 
 Ce qu'il manque pour administrer la plateforme au quotidien.
 
-- [ ] **P1.0 Design system shadcn/ui** (en cours)
+- [x] **P1.0 Design system shadcn/ui** (fait)
   - Dépend de : P0
   - Livre : Tailwind CSS + [shadcn/ui](https://ui.shadcn.com) dans `apps/web` (`components.json`,
     composants copiés dans `src/components/ui`), thème défini par des variables CSS (clair et
@@ -136,7 +136,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
 
 ## P2 · Patients et dossiers médicaux (étape 3 du plan)
 
-- [ ] **P2.1 Patients** (en cours)
+- [x] **P2.1 Patients** (fait)
   - Dépend de : P0
   - Livre : table `patients` (nom, prénoms, date de naissance, sexe, CIN facultatif, téléphone,
     adresse, région) ; `POST /api/organizations/:orgId/patients`,
@@ -151,7 +151,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     rôle assureur n'accède à cette route ; chaque création et modification est auditée avec
     avant/après.
 
-- [ ] **P2.2 Affiliations** (en cours)
+- [x] **P2.2 Affiliations** (fait)
   - Dépend de : P2.1, P1.6 (à défaut, régime saisi en texte libre puis migré)
   - Livre : table `affiliations` (patient, assureur, régime, numéro d'assuré, statut titulaire
     ou ayant droit, titulaire lié, employeur, début, fin) ; ajout par l'accueil
@@ -162,7 +162,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     un numéro d'assuré est unique par assureur ; l'assureur ne voit que les affiliations à
     son organisation, avec l'identité du patient mais sans contenu médical.
 
-- [ ] **P2.3 Rendez-vous** (en cours)
+- [x] **P2.3 Rendez-vous** (fait)
   - Dépend de : P2.1
   - Livre : table `appointments` (patient, centre, médecin, début, durée, motif, statut :
     prévu, arrivé, annulé, absent, terminé) ; CRUD pour `appointment.manage` ; agenda du jour
@@ -171,7 +171,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     `tstzrange`, extension `btree_gist`) ; le médecin doit être membre du centre avec le rôle `doctor` ; un rendez-vous
     passé ne peut plus être déplacé, seulement clos.
 
-- [ ] **P2.4 Consultations** (en cours)
+- [x] **P2.4 Consultations** (fait)
   - Dépend de : P2.1, P2.3 (le rendez-vous est facultatif), P1.5 (CIM-10 ; à défaut, code
     saisi et validé sur son format, puis relié à `icd10_codes` par une migration)
   - Livre : tables `consultations` (patient, centre, médecin, rendez-vous, motif, examen,
