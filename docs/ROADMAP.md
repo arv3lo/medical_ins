@@ -184,7 +184,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     quantité délivrée cumulée ne dépasse pas la quantité prescrite.
 
 - [ ] **P2.6 Documents**
-  - Dépend de : P2.4 ; décision sur le stockage (voir journal des décisions)
+  - Dépend de : P2.4 ; stockage Garage via S3 (voir journal des décisions)
   - Livre : interface `DocumentStorage` (put, get en flux, delete logique) avec un premier
     adaptateur ; table `documents` (patient, consultation ou demande, type, nom, taille, type
     MIME, empreinte SHA-256, clé de stockage) ; upload (taille max, types autorisés : PDF, JPEG,
@@ -373,10 +373,12 @@ Reprises du cahier des charges ; chaque réponse va dans le journal des décisio
 
 ## Journal des décisions
 
-| Date       | Décision                                                                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-24 | Stack : TypeScript, Fastify, Drizzle, PostgreSQL 16, React + Vite, auto-hébergement docker-compose + Caddy.                             |
-| 2026-10-24 | MinIO abandonné (images Docker plus publiées). Stockage des documents à choisir avant P2.6.                                             |
-| 2026-10-24 | Seul le super admin crée les comptes ; les admins d'organisation rattachent des comptes existants (revue PR #1).                        |
-| 2026-10-24 | Les routes métier prennent l'organisation dans l'URL (`/api/organizations/:orgId/...`) pour que chaque contrôle d'accès soit explicite. |
-| 2026-10-24 | Interface : shadcn/ui autant que possible (Tailwind, variables CSS de thème) ; charte couleurs à venir.                                 |
+| Date       | Décision                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-24 | Stack : TypeScript, Fastify, Drizzle, PostgreSQL 16, React + Vite, auto-hébergement docker-compose + Caddy.                                 |
+| 2026-10-24 | MinIO abandonné (images Docker plus publiées). Stockage des documents à choisir avant P2.6.                                                 |
+| 2026-10-24 | Seul le super admin crée les comptes ; les admins d'organisation rattachent des comptes existants (revue PR #1).                            |
+| 2026-10-24 | Les routes métier prennent l'organisation dans l'URL (`/api/organizations/:orgId/...`) pour que chaque contrôle d'accès soit explicite.     |
+| 2026-10-24 | Interface : shadcn/ui autant que possible (Tailwind, variables CSS de thème) ; charte couleurs à venir.                                     |
+| 2026-10-24 | Déploiement : une instance centrale unique (API + PostgreSQL avec réplique de secours) ; les centres et filiales y accèdent par navigateur. |
+| 2026-10-24 | Documents : interface `DocumentStorage` sur l'API S3, avec Garage auto-hébergé (plusieurs nœuds pour la redondance en production).          |
