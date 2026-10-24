@@ -1,0 +1,19 @@
+# Local development: only the database, the apps run with `pnpm dev`.
+# Usage: docker compose -f docker-compose.dev.yml up -d
+name: medical-ins-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: medins
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: medins
+    ports:
+      - '5432:5432'
+    volumes:
+      - dev_db_data:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+
+volumes:
+  dev_db_data:
