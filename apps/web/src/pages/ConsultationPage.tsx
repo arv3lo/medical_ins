@@ -28,7 +28,7 @@ export function ConsultationPage() {
   );
 }
 
-function Consultation({
+export function Consultation({
   user,
   centerId,
   consultationId,
@@ -42,8 +42,17 @@ function Consultation({
   if (!consultation.data) return <p className="text-muted-foreground">Chargement…</p>;
 
   const c = consultation.data;
-  // Drafts only reach their author; addenda are written by the center that signed it.
-  if (!c.signedAt) return <ConsultationEditor key={c.id} centerId={centerId} consultation={c} />;
-  const canAmend = c.organizationId === centerId && canIn(user, centerId, 'medical_record.write');
-  return <ConsultationRecord centerId={centerId} consultation={c} canAmend={canAmend} />;
+  // Drafts only reach their author, and are edited (like signed ones are amended) only from the
+  // center they were written in; elsewhere every save would answer 404.
+  const canWrite = c.organizationId === centerId && canIn(user, centerId, 'medical_record.write');
+  if (!c.signedAt && canWrite) {
+    return <ConsultationEditor key={c.id} centerId={centerId} consultation={c} />;
+  }
+  return (
+    <ConsultationRecord
+      centerId={centerId}
+      consultation={c}
+      canAmend={canWrite && Boolean(c.signedAt)}
+    />
+  );
 }
