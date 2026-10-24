@@ -94,5 +94,10 @@ These apply to new code, reviews and fixes.
   Business components compose them in `apps/web/src/components`. Colors come only from the theme
   tokens in `apps/web/src/index.css`, so the project's color chart can replace them in one place.
 
+- **Animations**: Animate.css classes (`animate__animated animate__…`) for entrance and attention
+  effects; `tw-animate-css` stays for shadcn component states. Keep them short and purposeful:
+  Animate.css cuts them to ~1 ms under `prefers-reduced-motion`, so never rely on an animation to
+  convey information.
+
 - TypeScript strict, ESM. `import type` for types. Prettier for formatting, ESLint for lint.
 - Small named exports, short doc comments on anything non-obvious.
