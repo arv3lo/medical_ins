@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayRange, formatDate, formatTime, toInstant } from './format';
+import { dayRange, formatDate, formatLocalDate, formatTime, toInstant } from './format';
 
 describe('format', () => {
   it('formats a calendar date without timezone shift', () => {
@@ -15,5 +15,15 @@ describe('format', () => {
     const { from, to } = dayRange('2026-11-03');
     expect(Date.parse(to) - Date.parse(from)).toBe(24 * 3_600_000);
     expect(formatTime(from)).toBe('00:00');
+  });
+
+  it('gives the local date of an instant, even when UTC is still on the day before', () => {
+    const tz = process.env.TZ;
+    process.env.TZ = 'Indian/Antananarivo';
+    try {
+      expect(formatLocalDate(toInstant('2026-11-03', '01:30'))).toBe('03/11/2026');
+    } finally {
+      process.env.TZ = tz;
+    }
   });
 });

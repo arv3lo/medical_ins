@@ -22,9 +22,18 @@ export function dayRange(date: string): { from: string; to: string } {
   return { from: start.toISOString(), to: next.toISOString() };
 }
 
+/** The local calendar date of a moment, AAAA-MM-JJ. */
+function localDateOf(moment: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`;
+}
+
 /** Today as a local date, AAAA-MM-JJ. */
 export function localToday(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return localDateOf(new Date());
+}
+
+/** An instant → the local date it falls on, 03/11/2026. */
+export function formatLocalDate(instant: string): string {
+  return formatDate(localDateOf(new Date(instant)));
 }

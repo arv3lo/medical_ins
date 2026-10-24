@@ -9,7 +9,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useChangeAppointmentStatus } from '@/lib/appointments';
-import { formatDate, formatTime } from '@/lib/format';
+import { formatLocalDate, formatTime } from '@/lib/format';
 import { ErrorAlert } from '@/components/error-alert';
 import { AppointmentActions } from './appointment-actions';
 import { AppointmentStatusBadge } from './appointment-status-badge';
@@ -47,7 +47,7 @@ export function AppointmentsTable({
           {appointments.map((a) => (
             <TableRow key={a.id}>
               <TableCell>
-                {showDate && `${formatDate(new Date(a.startsAt).toISOString())} `}
+                {showDate && `${formatLocalDate(a.startsAt)} `}
                 {formatTime(a.startsAt)}
                 <span className="text-muted-foreground"> · {a.durationMinutes} min</span>
               </TableCell>
