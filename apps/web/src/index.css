@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* Entrance and attention effects (animate__*); off under prefers-reduced-motion. */
+@import 'animate.css';
 
 /* Follow the system theme in CSS: no inline script, so a strict CSP stays possible. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
