@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isoDateSchema } from './dates.js';
+import { isoDateSchema, today } from './dates.js';
 
 /** Life cycle of a coverage request (prior approval), roadmap P3. */
 export const COVERAGE_REQUEST_STATUSES = [
@@ -96,3 +96,39 @@ export const transitionInputSchema = z.object({
   validUntil: isoDateSchema.optional(),
 });
 export type TransitionInput = z.infer<typeof transitionInputSchema>;
+
+/**
+ * What blocks a move the transition table allows (FR-004), as a French message, or null. Dates
+ * are calendar days in Madagascar, compared as AAAA-MM-JJ strings. Submission has its own check
+ * (`submissionProblem`), since it needs the affiliation.
+ */
+export function transitionProblem(
+  from: CoverageRequestStatus,
+  input: TransitionInput,
+  request: { estimatedAmount: number; validUntil: string | null },
+  day: string = today(),
+): string | null {
+  const needsReason =
+    input.to === 'rejected' ||
+    input.to === 'info_requested' ||
+    (input.to === 'cancelled' && from !== 'draft');
+  if (needsReason && !input.reason) return 'Motif requis';
+
+  if (input.to === 'granted') {
+    const { grantedAmount, validUntil } = input;
+    if (grantedAmount === undefined) return 'Montant accordé requis';
+    if (grantedAmount > request.estimatedAmount) {
+      return 'Le montant accordé ne peut pas dépasser le montant estimé';
+    }
+    if (!validUntil || validUntil < day)
+      return "Date limite de validité requise, à partir d'aujourd'hui";
+    if (grantedAmount < request.estimatedAmount && !input.reason) {
+      return 'Motif requis pour un accord partiel';
+    }
+  }
+
+  if (input.to === 'used' && (!request.validUntil || day > request.validUntil)) {
+    return "L'accord a expiré";
+  }
+  return null;
+}
