@@ -72,7 +72,9 @@ export function BookAppointmentDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) book.reset();
+        // Open on the day the agenda shows now, not the one it showed when first rendered.
+        if (next) setDate(initialDate ?? localToday());
+        else book.reset();
       }}
     >
       <DialogTrigger asChild>

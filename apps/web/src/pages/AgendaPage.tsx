@@ -23,13 +23,6 @@ const ALL = 'all';
 export function AgendaPage() {
   const user = useOutletContext<CurrentUser>();
   const { centers, centerId, setCenterId } = useCenterParam(user, 'appointment.read');
-  const [date, setDate] = useState(localToday());
-  // A doctor who opens the agenda sees their own day first.
-  const [doctorId, setDoctorId] = useState(
-    user.memberships.some((m) => m.organizationId === centerId && m.role === 'doctor')
-      ? user.id
-      : ALL,
-  );
 
   if (!centerId) return <p className="text-muted-foreground">Aucun centre accessible.</p>;
   const canManage = canIn(user, centerId, 'appointment.manage');
@@ -38,20 +31,45 @@ export function AgendaPage() {
     <section className="grid gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Agenda</h1>
-        <div className="flex flex-wrap gap-2">
-          <CenterPicker centers={centers} value={centerId} onChange={setCenterId} />
-          {canManage && <BookAppointmentDialog centerId={centerId} date={date} />}
-        </div>
+        <CenterPicker centers={centers} value={centerId} onChange={setCenterId} />
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Input
-          type="date"
-          aria-label="Jour"
-          className="w-44"
-          value={date}
-          onChange={(e) => e.target.value && setDate(e.target.value)}
-        />
-        <DoctorFilter centerId={centerId} value={doctorId} onChange={setDoctorId} />
+      {/* Keyed on the center: its doctor filter and day start over when the center changes. */}
+      <CenterAgenda key={centerId} user={user} centerId={centerId} canManage={canManage} />
+    </section>
+  );
+}
+
+function CenterAgenda({
+  user,
+  centerId,
+  canManage,
+}: {
+  user: CurrentUser;
+  centerId: string;
+  canManage: boolean;
+}) {
+  const [date, setDate] = useState(localToday());
+  // A doctor who opens the agenda sees their own day first.
+  const [doctorId, setDoctorId] = useState(
+    user.memberships.some((m) => m.organizationId === centerId && m.role === 'doctor')
+      ? user.id
+      : ALL,
+  );
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Input
+            type="date"
+            aria-label="Jour"
+            className="w-44"
+            value={date}
+            onChange={(e) => e.target.value && setDate(e.target.value)}
+          />
+          <DoctorFilter centerId={centerId} value={doctorId} onChange={setDoctorId} />
+        </div>
+        {canManage && <BookAppointmentDialog centerId={centerId} date={date} />}
       </div>
       <DayAppointments
         centerId={centerId}
@@ -59,7 +77,7 @@ export function AgendaPage() {
         doctorId={doctorId === ALL ? undefined : doctorId}
         canManage={canManage}
       />
-    </section>
+    </>
   );
 }
 
