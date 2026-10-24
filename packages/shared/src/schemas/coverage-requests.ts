@@ -43,3 +43,36 @@ export const FINAL_STATUSES: readonly CoverageRequestStatus[] = [
 export type CoverageRequestActor = 'center' | 'insurer' | 'system';
 
 export const coverageRequestStatusSchema = z.enum(COVERAGE_REQUEST_STATUSES);
+
+/**
+ * The only home of the life-cycle rule (spec FR-004): for each status, the statuses it may move
+ * to and who may move it there. The API enforces it; screens use it to offer only possible moves.
+ */
+const TRANSITIONS: Record<
+  CoverageRequestStatus,
+  Partial<Record<CoverageRequestStatus, CoverageRequestActor>>
+> = {
+  draft: { submitted: 'center', cancelled: 'center' },
+  submitted: { under_review: 'insurer', cancelled: 'center' },
+  under_review: {
+    granted: 'insurer',
+    rejected: 'insurer',
+    info_requested: 'insurer',
+    cancelled: 'center',
+  },
+  info_requested: { submitted: 'center', cancelled: 'center' },
+  granted: { used: 'center', expired: 'system' },
+  used: { billed: 'system' },
+  billed: {},
+  rejected: {},
+  cancelled: {},
+  expired: {},
+};
+
+export function canTransition(
+  from: CoverageRequestStatus,
+  to: CoverageRequestStatus,
+  actor: CoverageRequestActor,
+): boolean {
+  return TRANSITIONS[from][to] === actor;
+}
