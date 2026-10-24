@@ -231,17 +231,65 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect(sign.json()).toMatchObject({ message: 'Consultation signée : ajoutez un avenant' });
   });
 
+  /** Expects `query` to be stopped by one of the read-only triggers of migration 0008. */
+  const rejectedBy = (query: Promise<unknown>, message: RegExp) =>
+    expect(query).rejects.toMatchObject({ cause: { message: expect.stringMatching(message) } });
+
   it('enforces read-only signed consultations in the database too', async () => {
     const consultation = await signed();
-    await expect(
-      ctx.db
-        .update(consultations)
-        .set({ notes: 'changed' })
-        .where(eq(consultations.id, consultation.id)),
-    ).rejects.toThrow();
-    await expect(
-      ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${consultation.id}`),
-    ).rejects.toThrow();
+    const id = consultation.id;
+    await rejectedBy(
+      ctx.db.update(consultations).set({ notes: 'changed' }).where(eq(consultations.id, id)),
+      /is signed \(UPDATE rejected\)/,
+    );
+    // Rejected by the trigger, before the foreign keys of its diagnoses are even checked.
+    await rejectedBy(
+      ctx.db.delete(consultations).where(eq(consultations.id, id)),
+      /is signed \(DELETE rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`UPDATE diagnoses SET is_primary = false WHERE consultation_id = ${id}`),
+      /is signed \(UPDATE on diagnoses rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${id}`),
+      /is signed \(DELETE on diagnoses rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(
+        sql`INSERT INTO diagnoses (consultation_id, code, is_primary, position)
+            VALUES (${id}, 'R50.9', false, 1)`,
+      ),
+      /is signed \(INSERT on diagnoses rejected\)/,
+    );
+    await inject('POST', `${base()}/${id}/addenda`, doctor, { content: 'Avenant' });
+    await rejectedBy(
+      ctx.db.execute(sql`UPDATE consultation_addenda SET content = 'y'`),
+      /append-only \(UPDATE rejected\)/,
+    );
+    await rejectedBy(
+      ctx.db.execute(sql`DELETE FROM consultation_addenda`),
+      /append-only \(DELETE rejected\)/,
+    );
+  });
+
+  it('leaves a draft editable and deletable in the database', async () => {
+    const consultation = await draft();
+    await inject('PATCH', `${base()}/${consultation.id}`, doctor, {
+      diagnoses: [{ code: 'B54', primary: true }],
+    });
+    await ctx.db
+      .update(consultations)
+      .set({ notes: 'changed' })
+      .where(eq(consultations.id, consultation.id));
+    await ctx.db.execute(
+      sql`UPDATE diagnoses SET is_primary = false WHERE consultation_id = ${consultation.id}`,
+    );
+    await ctx.db.execute(sql`DELETE FROM diagnoses WHERE consultation_id = ${consultation.id}`);
+    await ctx.db.delete(consultations).where(eq(consultations.id, consultation.id));
+    expect(
+      await ctx.db.select().from(consultations).where(eq(consultations.id, consultation.id)),
+    ).toEqual([]);
   });
 
   it('shows signed consultations to care roles of every linked center, auditing each read', async () => {
@@ -307,9 +355,6 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       { content: 'Goutte épaisse positive' },
     ]);
     expect(await actions('consultation.addendum')).toHaveLength(1);
-    await expect(
-      ctx.db.execute(sql`UPDATE consultation_addenda SET content = 'y'`),
-    ).rejects.toThrow();
   });
 
   it('keeps medical content out of the append-only audit log', async () => {
