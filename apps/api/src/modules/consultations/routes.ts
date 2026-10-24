@@ -53,9 +53,10 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
-        action: 'medical_record.list',
+        action: 'medical_record.read',
         entityType: 'patient',
         entityId: patientId,
+        after: { consultationIds: list.map((c) => c.id) },
         ip: request.ip,
       });
       return list;

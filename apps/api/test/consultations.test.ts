@@ -233,7 +233,10 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect(
       list.json<{ id: string; primaryDiagnosis: unknown }[]>().find((c) => c.id === done.id),
     ).toMatchObject({ primaryDiagnosis: { code: 'B54' } });
-    expect(await actions('medical_record.list')).toHaveLength(1);
+    // The audit records which consultations were shown, by id only.
+    expect(await actions('medical_record.read')).toMatchObject([
+      { entityType: 'patient', entityId: patientId, after: { consultationIds: ids } },
+    ]);
     expect((await inject('GET', url, reception)).statusCode).toBe(403);
   });
 
