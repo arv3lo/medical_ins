@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { auditLogs, users } from '../src/db/schema.js';
+import { auditLogs, sessions, users } from '../src/db/schema.js';
 import * as password from '../src/lib/password.js';
 import { TEST_DATABASE_URL, createUser, login, resetDb, setupTestApp } from './helpers.js';
 
@@ -86,6 +86,18 @@ describe.skipIf(!TEST_DATABASE_URL)('auth', () => {
       headers: { cookie },
     });
     expect(after.statusCode).toBe(401);
+  });
+
+  it('purges expired sessions when someone logs in', async () => {
+    const other = await createUser(ctx.db, { email: 'gone@example.mg', password: 'gone-pass-1' });
+    await ctx.db
+      .insert(sessions)
+      .values({ id: 'expired', userId: other.id, expiresAt: new Date(Date.now() - 1000) });
+
+    await login(ctx.app, 'doc@example.mg', 'correct-horse');
+    const ids = (await ctx.db.select({ id: sessions.id }).from(sessions)).map((s) => s.id);
+    expect(ids).toHaveLength(1);
+    expect(ids).not.toContain('expired');
   });
 
   it('keeps the audit log append-only', async () => {

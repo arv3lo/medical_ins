@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import type { Db, Tx } from '../db/client.js';
 import { sessions } from '../db/schema.js';
 
@@ -13,8 +13,12 @@ export async function createSession(
   ttlHours: number,
   meta: { ip?: string; userAgent?: string },
 ): Promise<{ token: string; expiresAt: Date }> {
+  const now = new Date();
+  // Logins are rare enough to also clear every expired session, so the table stays small.
+  await db.delete(sessions).where(lte(sessions.expiresAt, now));
+
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + ttlHours * 3_600_000);
+  const expiresAt = new Date(now.getTime() + ttlHours * 3_600_000);
   await db.insert(sessions).values({
     id: hashToken(token),
     userId,
