@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dayRange, formatDate, formatLocalDate, formatTime, toInstant } from './format';
 
 describe('format', () => {
@@ -18,12 +18,11 @@ describe('format', () => {
   });
 
   it('gives the local date of an instant, even when UTC is still on the day before', () => {
-    const tz = process.env.TZ;
-    process.env.TZ = 'Indian/Antananarivo';
+    vi.stubEnv('TZ', 'Indian/Antananarivo');
     try {
       expect(formatLocalDate(toInstant('2026-11-03', '01:30'))).toBe('03/11/2026');
     } finally {
-      process.env.TZ = tz;
+      vi.unstubAllEnvs();
     }
   });
 });
