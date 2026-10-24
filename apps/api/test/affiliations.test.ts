@@ -238,6 +238,19 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       memberNumber: 'OS-123456',
       patient: { lastName: 'Rakoto', birthDate: '1985-03-12' },
     });
+    // Only what a decision needs: not the declaring center, nor internal ids and timestamps.
+    expect(Object.keys(rows[0]!).sort()).toEqual([
+      'employer',
+      'endsOn',
+      'holderStatus',
+      'id',
+      'memberNumber',
+      'patient',
+      'planName',
+      'rejectionReason',
+      'startsOn',
+      'status',
+    ]);
     expect(Object.keys(rows[0]!.patient as object).sort()).toEqual([
       'birthDate',
       'firstNames',

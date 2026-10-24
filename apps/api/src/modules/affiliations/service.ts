@@ -22,24 +22,32 @@ export function listPatientAffiliations(db: Db, patientId: string) {
     .orderBy(desc(affiliations.startsOn));
 }
 
-/** The insurer's view: who is covered, never what they were treated for. */
-export async function listInsurerAffiliations(
-  db: Db,
-  insurerId: string,
-  status?: AffiliationStatus,
-) {
-  const rows = await db
-    .select({
-      affiliation: withInsurerName,
-      patient: {
-        lastName: patients.lastName,
-        firstNames: patients.firstNames,
-        birthDate: patients.birthDate,
-        nationalId: patients.nationalId,
-      },
-    })
+/**
+ * The insurer's view (InsuredAffiliation): only what a decision needs. Not which center
+ * declared it, which can hint at what the patient is treated for, nor internal ids.
+ */
+const insurerView = {
+  id: affiliations.id,
+  memberNumber: affiliations.memberNumber,
+  holderStatus: affiliations.holderStatus,
+  planName: affiliations.planName,
+  employer: affiliations.employer,
+  startsOn: affiliations.startsOn,
+  endsOn: affiliations.endsOn,
+  status: affiliations.status,
+  rejectionReason: affiliations.rejectionReason,
+  patient: {
+    lastName: patients.lastName,
+    firstNames: patients.firstNames,
+    birthDate: patients.birthDate,
+    nationalId: patients.nationalId,
+  },
+};
+
+export function listInsurerAffiliations(db: Db, insurerId: string, status?: AffiliationStatus) {
+  return db
+    .select(insurerView)
     .from(affiliations)
-    .innerJoin(organizations, eq(organizations.id, affiliations.insurerId))
     .innerJoin(patients, eq(patients.id, affiliations.patientId))
     .where(
       and(
@@ -48,7 +56,6 @@ export async function listInsurerAffiliations(
       ),
     )
     .orderBy(affiliations.createdAt);
-  return rows.map(({ affiliation, patient }) => ({ ...affiliation, patient }));
 }
 
 export async function insertAffiliation(

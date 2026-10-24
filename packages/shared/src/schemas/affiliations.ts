@@ -63,8 +63,22 @@ export type Affiliation = {
   declaredByOrganizationId: string;
 };
 
-/** What an insurer sees of an affiliation: the person's identity, never medical content. */
-export type InsuredAffiliation = Affiliation & {
+/**
+ * What an insurer sees of an affiliation: what a decision needs and the person's identity,
+ * never medical content nor the declaring center.
+ */
+export type InsuredAffiliation = Pick<
+  Affiliation,
+  | 'id'
+  | 'memberNumber'
+  | 'holderStatus'
+  | 'planName'
+  | 'employer'
+  | 'startsOn'
+  | 'endsOn'
+  | 'status'
+  | 'rejectionReason'
+> & {
   patient: { lastName: string; firstNames: string; birthDate: string; nationalId: string | null };
 };
 
