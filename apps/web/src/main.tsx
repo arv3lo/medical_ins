@@ -7,6 +7,8 @@ import { createQueryClient } from './lib/query-client';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { OrganizationsPage } from './pages/OrganizationsPage';
+import { PatientPage } from './pages/PatientPage';
+import { PatientsPage } from './pages/PatientsPage';
 import './index.css';
 
 const queryClient = createQueryClient();
@@ -20,6 +22,8 @@ createRoot(document.getElementById('root')!).render(
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="/organizations" element={<OrganizationsPage />} />
+            <Route path="/patients" element={<PatientsPage />} />
+            <Route path="/patients/:patientId" element={<PatientPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
