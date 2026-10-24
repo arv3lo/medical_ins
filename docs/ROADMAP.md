@@ -52,6 +52,18 @@ La V1 utilisable par un premier centre pilote = P1 à P4 + les items P6 marqués
 
 Ce qu'il manque pour administrer la plateforme au quotidien.
 
+- [ ] **P1.0 Design system shadcn/ui** (en cours : Claude)
+  - Dépend de : P0
+  - Livre : Tailwind CSS + [shadcn/ui](https://ui.shadcn.com) dans `apps/web` (`components.json`,
+    composants copiés dans `src/components/ui`), thème défini par des variables CSS (clair et
+    sombre) ; les pages existantes (connexion, accueil, organisations) migrées vers les
+    composants shadcn ; `styles.css` actuel supprimé.
+  - Règles : utiliser un composant shadcn chaque fois qu'il en existe un (Button, Input, Form,
+    Table, Dialog, Select, Calendar, Toast, …) avant d'écrire un composant maison ; les composants
+    métier se construisent par composition dans `src/components`.
+  - Acceptation : aucune couleur codée en dur hors des variables du thème ; la charte couleurs
+    fournie par Gérald remplacera ces variables sans toucher aux composants.
+
 - [ ] **P1.1 Gestion des comptes (super admin)**
   - Dépend de : P0
   - Livre : `PATCH /api/users/:id` (nom, téléphone, actif), `POST /api/users/:id/reset-password`
@@ -367,3 +379,4 @@ Reprises du cahier des charges ; chaque réponse va dans le journal des décisio
 | 2026-10-24 | MinIO abandonné (images Docker plus publiées). Stockage des documents à choisir avant P2.6.                                             |
 | 2026-10-24 | Seul le super admin crée les comptes ; les admins d'organisation rattachent des comptes existants (revue PR #1).                        |
 | 2026-10-24 | Les routes métier prennent l'organisation dans l'URL (`/api/organizations/:orgId/...`) pour que chaque contrôle d'accès soit explicite. |
+| 2026-10-24 | Interface : shadcn/ui autant que possible (Tailwind, variables CSS de thème) ; charte couleurs à venir.                                 |
