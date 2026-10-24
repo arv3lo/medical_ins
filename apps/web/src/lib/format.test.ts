@@ -7,6 +7,7 @@ import {
   formatLocalDate,
   formatTime,
   toInstant,
+  weekRange,
 } from './format';
 
 describe('format', () => {
@@ -43,5 +44,12 @@ describe('format', () => {
     const { from, to } = daysRange('2026-11-03', 7);
     expect(from).toBe(dayRange('2026-11-03').from);
     expect(to).toBe(dayRange('2026-11-09').to);
+  });
+
+  it('gives the bounds of the local week, Monday to Sunday, around a date', () => {
+    const week = { from: dayRange('2026-11-02').from, to: dayRange('2026-11-08').to };
+    expect(weekRange('2026-11-05')).toEqual(week);
+    expect(weekRange('2026-11-02')).toEqual(week);
+    expect(weekRange('2026-11-08')).toEqual(week);
   });
 });

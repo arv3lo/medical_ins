@@ -23,6 +23,12 @@ export function daysRange(date: string, days: number): { from: string; to: strin
 /** The instants where a local day starts and the next one starts. */
 export const dayRange = (date: string) => daysRange(date, 1);
 
+/** The instants where the local week (Monday to Sunday) holding `date` starts and ends. */
+export function weekRange(date: string): { from: string; to: string } {
+  const daysSinceMonday = (new Date(`${date}T12:00`).getDay() + 6) % 7;
+  return daysRange(addDays(date, -daysSinceMonday), 7);
+}
+
 /** A local date (AAAA-MM-JJ) moved by `days` whole days. */
 export function addDays(date: string, days: number): string {
   const moment = new Date(`${date}T12:00`);
