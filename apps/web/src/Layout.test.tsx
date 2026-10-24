@@ -20,4 +20,14 @@ describe('Layout', () => {
     expect(withUser(userWith(member(CENTER_A, 'reception')))).toContain('Patients');
     expect(withUser(userWith(member(INSURER, 'insurer_manager')))).not.toContain('Patients');
   });
+
+  it('shows the insured menu to insurer managers only', () => {
+    const withUser = (user: ReturnType<typeof userWith>) => {
+      const queryClient = testQueryClient();
+      queryClient.setQueryData(ME_KEY, user);
+      return render(queryClient, <Layout />);
+    };
+    expect(withUser(userWith(member(INSURER, 'insurer_manager')))).toContain('Assurés');
+    expect(withUser(userWith(member(CENTER_A, 'reception')))).not.toContain('Assurés');
+  });
 });

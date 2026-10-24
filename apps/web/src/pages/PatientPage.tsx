@@ -2,11 +2,15 @@ import { SEX_LABELS, type CurrentUser, type Patient } from '@medical-ins/shared'
 import { ArrowLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
+import { today } from '@medical-ins/shared';
+import { AffiliationsTable } from '@/components/affiliations/affiliations-table';
+import { DeclareAffiliationDialog } from '@/components/affiliations/declare-affiliation-dialog';
 import { ErrorAlert } from '@/components/error-alert';
 import { PatientForm } from '@/components/patients/patient-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
+import { usePatientAffiliations } from '@/lib/affiliations';
 import { formatDate } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
 import { useCenterParam } from './PatientsPage';
@@ -66,7 +70,43 @@ function PatientDetails({
           </CardContent>
         </Card>
       )}
+      {patient.data && (
+        <AffiliationsCard
+          centerId={centerId}
+          patientId={patientId}
+          canDeclare={canIn(user, centerId, 'patient.update')}
+        />
+      )}
     </section>
+  );
+}
+
+function AffiliationsCard({
+  centerId,
+  patientId,
+  canDeclare,
+}: {
+  centerId: string;
+  patientId: string;
+  canDeclare: boolean;
+}) {
+  const affiliations = usePatientAffiliations(centerId, patientId);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Affiliations</CardTitle>
+        {canDeclare && <DeclareAffiliationDialog centerId={centerId} patientId={patientId} />}
+      </CardHeader>
+      <CardContent>
+        {affiliations.error && <ErrorAlert error={affiliations.error} />}
+        {affiliations.data?.length === 0 && (
+          <p className="text-muted-foreground">Aucune affiliation déclarée.</p>
+        )}
+        {affiliations.data && affiliations.data.length > 0 && (
+          <AffiliationsTable affiliations={affiliations.data} today={today()} />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

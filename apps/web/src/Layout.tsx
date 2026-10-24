@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Outlet } from 'react-router';
 import { ErrorAlert } from '@/components/error-alert';
 import { Button } from '@/components/ui/button';
-import { centersWith } from '@/lib/centers';
+import { centersWith, organizationsWith } from '@/lib/centers';
 import { cn } from '@/lib/utils';
 import { useCurrentUser, useLogout } from './lib/auth';
 
@@ -40,6 +40,11 @@ export function Layout() {
           {centersWith(user, 'patient.read_admin').length > 0 && (
             <NavLink to="/patients" className={navLinkClass}>
               Patients
+            </NavLink>
+          )}
+          {organizationsWith(user, 'insured.manage', 'insurer').length > 0 && (
+            <NavLink to="/assures" className={navLinkClass}>
+              Assurés
             </NavLink>
           )}
           {user.isSuperAdmin && (

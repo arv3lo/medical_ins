@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { Layout } from './Layout';
 import { createQueryClient } from './lib/query-client';
 import { HomePage } from './pages/HomePage';
+import { InsuredPage } from './pages/InsuredPage';
 import { LoginPage } from './pages/LoginPage';
 import { OrganizationsPage } from './pages/OrganizationsPage';
 import { PatientPage } from './pages/PatientPage';
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/organizations" element={<OrganizationsPage />} />
             <Route path="/patients" element={<PatientsPage />} />
             <Route path="/patients/:patientId" element={<PatientPage />} />
+            <Route path="/assures" element={<InsuredPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
