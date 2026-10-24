@@ -374,6 +374,8 @@ Reprises du cahier des charges ; chaque réponse va dans le journal des décisio
 - Quel délai maximal de réponse de l'assureur pour une demande urgente ?
 - Source et licence des libellés CIM-10 FR (OMS / ATIH) avant d'importer la table complète
   (P1.5) ; le jeu de départ de P2.4 en reprend une partie.
+- Valider les tarifs indicatifs du jeu d'actes de départ (P3.1, migration `0015`) avant la mise
+  en production.
 - Obtenir un vrai bon de prise en charge et une vraie feuille de soins pour valider les
   formulaires.
 
