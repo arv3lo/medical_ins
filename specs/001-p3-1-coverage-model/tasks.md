@@ -93,21 +93,21 @@ d'arrivée, acteur) et compare à la table de `data-model.md`.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [ ] T010 [US1] Test exhaustif dans `packages/shared/src/schemas/coverage-requests.test.ts` :
+- [X] T010 [US1] Test exhaustif dans `packages/shared/src/schemas/coverage-requests.test.ts` :
   - pour chaque `from` de `COVERAGE_REQUEST_STATUSES`, chaque `to` et chaque acteur (`center`, `insurer`, `system`), `canTransition(from, to, actor)` vaut `true` exactement pour les 13 lignes de la table « Machine à états » de `data-model.md` ;
   - un statut de `FINAL_STATUSES` n'a aucune transition sortante ;
   - aucun `to` n'est `draft`.
 
 ### Implémentation
 
-- [ ] T011 [US1] Implémenter `TRANSITIONS` (de → vers → acteur) et `canTransition` dans `packages/shared/src/schemas/coverage-requests.ts`. Commentaire court : la table est la seule source de la règle, le serveur la fait respecter et l'interface s'en sert pour n'afficher que les actions possibles.
-- [ ] T012 [US1] Test puis implémentation de `transitionInputSchema` (zod) dans `packages/shared/src/schemas/coverage-requests.ts` :
+- [X] T011 [US1] Implémenter `TRANSITIONS` (de → vers → acteur) et `canTransition` dans `packages/shared/src/schemas/coverage-requests.ts`. Commentaire court : la table est la seule source de la règle, le serveur la fait respecter et l'interface s'en sert pour n'afficher que les actions possibles.
+- [X] T012 [US1] Test puis implémentation de `transitionInputSchema` (zod) dans `packages/shared/src/schemas/coverage-requests.ts` :
   - `{ to, reason?, grantedAmount?, validUntil? }` ;
   - `reason` : chaîne « non vide après trim, au plus 1 000 caractères » ;
   - `grantedAmount` : entier > 0 ;
   - `validUntil` : `isoDateSchema` ;
   - `to` ne peut pas être `draft`.
-- [ ] T013 [US1] Test puis implémentation de `transitionProblem(from, to, input, context)` dans `packages/shared/src/schemas/coverage-requests.ts`. Elle renvoie un message français ou `null` :
+- [X] T013 [US1] Test puis implémentation de `transitionProblem(from, to, input, context)` dans `packages/shared/src/schemas/coverage-requests.ts`. Elle renvoie un message français ou `null` :
   - motif obligatoire pour `cancelled` depuis `submitted`, `under_review` ou `info_requested`, ainsi que pour `rejected` et `info_requested` ;
   - pour `granted` : `0 < grantedAmount ≤ estimatedAmount`, `validUntil ≥ today()`, motif obligatoire si `grantedAmount < estimatedAmount` ;
   - pour `used` : `today() ≤ validUntil`.
