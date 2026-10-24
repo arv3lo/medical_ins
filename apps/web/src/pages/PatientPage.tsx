@@ -13,12 +13,12 @@ import { canIn } from '@/lib/centers';
 import { usePatientAffiliations } from '@/lib/affiliations';
 import { formatDate } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
-import { useCenterParam } from './PatientsPage';
+import { useCenterParam } from '@/lib/use-center-param';
 
 export function PatientPage() {
   const user = useOutletContext<CurrentUser>();
   const { patientId = '' } = useParams();
-  const { centerId } = useCenterParam(user);
+  const { centerId } = useCenterParam(user, 'patient.read_admin');
 
   if (!centerId) return <p className="text-muted-foreground">Aucun centre accessible.</p>;
   return <PatientDetails user={user} centerId={centerId} patientId={patientId} />;
