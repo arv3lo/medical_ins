@@ -55,6 +55,13 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
   const get = (url: string, cookie: string) =>
     ctx.app.inject({ method: 'GET', url, headers: { cookie } });
 
+  const link = (orgId: string, patientId: string, cookie: string) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${orgId}/patients/${patientId}/link`,
+      headers: { cookie },
+    });
+
   const update = (
     orgId: string,
     patientId: string,
@@ -316,5 +323,47 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
     expect((await update(centerA, existing.id, reception, { lastName: 'Rakoto' })).statusCode).toBe(
       200,
     );
+  });
+
+  it('audits a link once, and not again when the patient is linked a second time', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const receptionB = await as('reception', centerB);
+
+    expect((await link(centerB, patient.id, receptionB)).statusCode).toBe(204);
+    expect((await link(centerB, patient.id, receptionB)).statusCode).toBe(204);
+
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.action, 'patient.link'), eq(auditLogs.entityId, patient.id)));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.organizationId).toBe(centerB);
+  });
+
+  it('refuses a link to an unknown patient or by a role without patient.create', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const unknown = '00000000-0000-4000-8000-000000000000';
+    expect((await link(centerB, unknown, await as('reception', centerB))).statusCode).toBe(404);
+    expect((await link(centerB, patient.id, await as('doctor', centerB))).statusCode).toBe(403);
+  });
+
+  it('refuses an update from a center the patient is not linked to', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const response = await update(centerB, patient.id, await as('reception', centerB), {
+      phone: '032 00 000 00',
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("keeps insurer members away from a center's patient routes", async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const manager = await as('insurer_manager', insurer);
+    const base = `/api/organizations/${centerA}/patients`;
+
+    expect((await get(base, manager)).statusCode).toBe(403);
+    expect((await get(`${base}/${patient.id}`, manager)).statusCode).toBe(403);
+    expect((await create(centerA, manager, { ...rakoto, nationalId: null })).statusCode).toBe(403);
+    expect((await update(centerA, patient.id, manager, { phone: null })).statusCode).toBe(403);
+    expect((await link(centerA, patient.id, manager)).statusCode).toBe(403);
   });
 });
