@@ -1,5 +1,5 @@
 import type { Role } from '@medical-ins/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { appointments, auditLogs, organizations, users } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helpers.js';
@@ -92,6 +92,32 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
       })
       .returning();
     return row!.id;
+  }
+
+  /**
+   * Sets the appointment's status in a transaction that stays open until `request` is blocked
+   * on that row, then commits: the request runs exactly "at the same moment" as the change.
+   */
+  async function racing<T>(id: string, status: 'cancelled' | 'arrived', request: () => Promise<T>) {
+    let pending!: Promise<T>;
+    await ctx.db.transaction(async (tx) => {
+      await tx.update(appointments).set({ status }).where(eq(appointments.id, id));
+      pending = request();
+      await untilSomeoneWaitsForALock();
+    });
+    return pending;
+  }
+
+  async function untilSomeoneWaitsForALock() {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const [row] = await ctx.db.execute<{ waiting: number }>(
+        sql`SELECT count(*)::int AS waiting FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+      );
+      if (row!.waiting > 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('the request never waited for the row lock');
   }
 
   const auditOf = (action: string) =>
@@ -266,5 +292,18 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
       before: { status: 'scheduled' },
       after: { status: 'cancelled' },
     });
+  });
+
+  it('does not move an appointment cancelled while the reschedule runs', async () => {
+    const appointment = (await book()).json<{ id: string }>();
+    const moved = await racing(appointment.id, 'cancelled', () =>
+      inject('PATCH', `${base()}/${appointment.id}`, reception, { startsAt: at('11:00') }),
+    );
+    expect(moved.statusCode).toBe(409);
+    const [row] = await ctx.db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.id, appointment.id));
+    expect(row).toMatchObject({ status: 'cancelled', startsAt: new Date(at('09:00')) });
   });
 });

@@ -44,6 +44,20 @@ export async function findAppointment(db: Db | Tx, organizationId: string, id: s
   return row;
 }
 
+/**
+ * Reads an appointment of the center and locks its row until the transaction ends, so a
+ * concurrent reschedule or status change waits and then sees this one's result.
+ */
+export async function lockAppointment(tx: Tx, organizationId: string, id: string) {
+  const [row] = await tx
+    .select()
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.organizationId, organizationId)))
+    .for('update');
+  if (!row) throw notFound('Rendez-vous');
+  return row;
+}
+
 export function listDoctors(db: Db, organizationId: string) {
   return db
     .select({ id: users.id, fullName: users.fullName })
@@ -59,7 +73,7 @@ export function listDoctors(db: Db, organizationId: string) {
     .orderBy(users.fullName);
 }
 
-export async function requireDoctorOf(db: Db, organizationId: string, doctorId: string) {
+export async function requireDoctorOf(db: Db | Tx, organizationId: string, doctorId: string) {
   const doctor = await db.query.memberships.findFirst({
     where: and(
       eq(memberships.organizationId, organizationId),

@@ -19,6 +19,7 @@ import {
   findAppointment,
   listAppointments,
   listDoctors,
+  lockAppointment,
   requireDoctorOf,
   requireFuture,
   setStatus,
@@ -83,18 +84,19 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     const { orgId, appointmentId } = appointmentParams.parse(request.params);
     const actor = requirePermission(request, orgId, 'appointment.manage');
     const input = rescheduleAppointmentInputSchema.parse(request.body);
-    const before = await findAppointment(db, orgId, appointmentId);
-    if (before.status !== 'scheduled') {
-      throw new HttpError(409, 'Seul un rendez-vous prévu peut être déplacé');
-    }
-    requireFuture(before.startsAt);
-    const startsAt = input.startsAt ? new Date(input.startsAt) : before.startsAt;
-    requireFuture(startsAt);
-    if (input.doctorId) await requireDoctorOf(db, orgId, input.doctorId);
 
-    const durationMinutes = input.durationMinutes ?? before.durationMinutes;
     await withoutOverlap(() =>
       db.transaction(async (tx) => {
+        const before = await lockAppointment(tx, orgId, appointmentId);
+        if (before.status !== 'scheduled') {
+          throw new HttpError(409, 'Seul un rendez-vous prévu peut être déplacé');
+        }
+        requireFuture(before.startsAt);
+        const startsAt = input.startsAt ? new Date(input.startsAt) : before.startsAt;
+        requireFuture(startsAt);
+        if (input.doctorId) await requireDoctorOf(tx, orgId, input.doctorId);
+
+        const durationMinutes = input.durationMinutes ?? before.durationMinutes;
         const [after] = await tx
           .update(appointments)
           .set({ ...input, startsAt, durationMinutes, endsAt: endOf(startsAt, durationMinutes) })
