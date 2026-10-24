@@ -35,6 +35,8 @@ const ONE_PER_APPOINTMENT = 'consultations_appointment_id_unique';
 const alreadyConsulted = (consultationId?: string) =>
   new HttpError(409, 'Une consultation existe déjà pour ce rendez-vous', { consultationId });
 
+// Audit entries hold ids and metadata only: audit_logs can never be purged, and it is not
+// restricted to care roles, so no medical content (reason, notes, vitals, diagnoses…) goes there.
 export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): void {
   app.get('/api/referentials/icd10', async (request) => {
     requireUser(request);
@@ -113,7 +115,7 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
           action: 'consultation.create',
           entityType: 'consultation',
           entityId: created!.id,
-          after: created,
+          after: { patientId: created!.patientId, appointmentId: created!.appointmentId },
           ip: request.ip,
         });
         return created!.id;
@@ -131,20 +133,18 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
     const actor = requirePermission(request, orgId, 'medical_record.write');
     const input = updateConsultationInputSchema.parse(request.body);
     return db.transaction(async (tx) => {
-      const before = await requireOwnDraft(tx, orgId, consultationId, actor.id);
+      await requireOwnDraft(tx, orgId, consultationId, actor.id);
       await updateDraft(tx, consultationId, input);
-      const after = await findConsultation(tx, consultationId, actor.id);
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
         action: 'consultation.update',
         entityType: 'consultation',
         entityId: consultationId,
-        before,
-        after,
+        after: { fields: Object.keys(input) },
         ip: request.ip,
       });
-      return after;
+      return findConsultation(tx, consultationId, actor.id);
     });
   });
 
@@ -155,13 +155,14 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       const draft = await requireOwnDraft(tx, orgId, consultationId, actor.id);
       const problem = signingProblem(draft);
       if (problem) throw new HttpError(400, problem);
-      await markSigned(tx, consultationId);
+      const signedAt = await markSigned(tx, consultationId);
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,
         action: 'consultation.sign',
         entityType: 'consultation',
         entityId: consultationId,
+        after: { signedAt },
         ip: request.ip,
       });
       // Signing the consultation ends the visit it came from.
@@ -203,7 +204,7 @@ export function consultationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
         action: 'consultation.addendum',
         entityType: 'consultation',
         entityId: consultationId,
-        after: added,
+        after: { addendumId: added!.id },
         ip: request.ip,
       });
       return findConsultation(tx, consultationId, actor.id);

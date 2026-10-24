@@ -257,6 +257,39 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     ).rejects.toThrow();
   });
 
+  it('keeps medical content out of the append-only audit log', async () => {
+    const created = await start(doctor, { reason: 'MARKER-REASON' });
+    const { id } = created.json<{ id: string }>();
+    await inject('PATCH', `${base()}/${id}`, doctor, {
+      reason: 'MARKER-REASON-2',
+      examination: 'MARKER-EXAMINATION',
+      notes: 'MARKER-NOTES',
+      vitals: { temperatureC: 39.2 },
+      diagnoses: [{ code: 'B54', primary: true }],
+    });
+    await inject('POST', `${base()}/${id}/sign`, doctor);
+    const added = await inject('POST', `${base()}/${id}/addenda`, doctor, {
+      content: 'MARKER-ADDENDUM',
+    });
+    expect(added.statusCode).toBe(201);
+
+    const rows = await ctx.db.select().from(auditLogs);
+    const json = JSON.stringify(rows);
+    for (const forbidden of ['MARKER', 'Paludisme', 'temperatureC', '39.2']) {
+      expect(json).not.toContain(forbidden);
+    }
+    expect(await actions('consultation.update')).toMatchObject([
+      {
+        before: null,
+        after: { fields: ['reason', 'examination', 'vitals', 'notes', 'diagnoses'] },
+      },
+    ]);
+    const [sign] = await actions('consultation.sign');
+    expect(sign!.after).toMatchObject({ signedAt: expect.any(String) });
+    const [addendum] = await actions('consultation.addendum');
+    expect(addendum).toMatchObject({ entityId: id, after: { addendumId: expect.any(String) } });
+  });
+
   describe('from an appointment', () => {
     let appointmentId: string;
 

@@ -191,9 +191,12 @@ export async function updateDraft(tx: Tx, id: string, input: UpdateConsultationI
   }
 }
 
-export async function markSigned(tx: Tx, id: string) {
-  await tx
+/** Signs the draft and returns when it was signed. */
+export async function markSigned(tx: Tx, id: string): Promise<Date> {
+  const [row] = await tx
     .update(consultations)
     .set({ signedAt: sql`now()` })
-    .where(eq(consultations.id, id));
+    .where(eq(consultations.id, id))
+    .returning({ signedAt: consultations.signedAt });
+  return row!.signedAt!;
 }
