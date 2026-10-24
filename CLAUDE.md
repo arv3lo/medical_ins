@@ -72,7 +72,7 @@ These apply to new code, reviews and fixes.
   needs two real callers. Delete dead code rather than keeping it "just in case".
 - **SOLID**: one responsibility per module, component and function; routes stay thin and
   delegate to `lib/` (or a module service once logic grows); no route→route imports.
-- Readable code: clear names, short functions, early returns, comments that explain *why*.
+- Readable code: clear names, short functions, early returns, comments that explain _why_.
 - Split files beyond ~500 lines along their natural seams, unless the flow is genuinely linear.
 - Refactors don't change behavior unless that is the explicit goal (then it is its own `fix:`
   commit). Auth, session and audit code get mechanical refactors only.
