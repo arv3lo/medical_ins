@@ -7,3 +7,4 @@ export * from './schemas/dates.js';
 export * from './schemas/affiliations.js';
 export * from './schemas/appointments.js';
 export * from './schemas/consultations.js';
+export * from './schemas/coverage-requests.js';

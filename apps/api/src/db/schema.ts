@@ -1,6 +1,7 @@
 import {
   AFFILIATION_STATUSES,
   APPOINTMENT_STATUSES,
+  COVERAGE_REQUEST_STATUSES,
   HOLDER_STATUSES,
   ORGANIZATION_TYPES,
   ROLES,
@@ -32,6 +33,7 @@ export const sex = pgEnum('sex', SEXES);
 export const holderStatus = pgEnum('holder_status', HOLDER_STATUSES);
 export const affiliationStatus = pgEnum('affiliation_status', AFFILIATION_STATUSES);
 export const appointmentStatus = pgEnum('appointment_status', APPOINTMENT_STATUSES);
+export const coverageRequestStatus = pgEnum('coverage_request_status', COVERAGE_REQUEST_STATUSES);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -269,6 +271,124 @@ export const consultationAddenda = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index().on(t.consultationId)],
+);
+
+/**
+ * Medical acts a coverage request can ask for. Starts as a small seeded list with indicative
+ * reference prices (migration 0015); the full referential (roadmap P1.5) extends this table.
+ */
+export const medicalActs = pgTable(
+  'medical_acts',
+  {
+    code: text('code').primaryKey(),
+    label: text('label').notNull(),
+    /** Ariary (MGA), whole. */
+    referencePrice: integer('reference_price').notNull(),
+  },
+  (t) => [check('medical_acts_reference_price_positive', sql`${t.referencePrice} > 0`)],
+);
+
+/**
+ * A request for prior approval, from a health center to the insurer of the patient's
+ * affiliation. Amounts are whole ariary computed by the server; the status only moves through
+ * the shared transition table, and every move is kept in coverage_request_events.
+ */
+export const coverageRequests = pgTable(
+  'coverage_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    centerId: uuid('center_id')
+      .notNull()
+      .references(() => organizations.id),
+    insurerId: uuid('insurer_id')
+      .notNull()
+      .references(() => organizations.id),
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    affiliationId: uuid('affiliation_id')
+      .notNull()
+      .references(() => affiliations.id),
+    diagnosisCode: text('diagnosis_code')
+      .notNull()
+      .references(() => icd10Codes.code),
+    estimatedAmount: integer('estimated_amount').notNull(),
+    grantedAmount: integer('granted_amount'),
+    patientShare: integer('patient_share'),
+    validUntil: date('valid_until'),
+    status: coverageRequestStatus('status').notNull().default('draft'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [
+    index().on(t.centerId, t.status),
+    index().on(t.insurerId, t.status),
+    index().on(t.patientId),
+    check('coverage_requests_estimated_not_negative', sql`${t.estimatedAmount} >= 0`),
+    check(
+      'coverage_requests_granted_in_range',
+      sql`${t.grantedAmount} IS NULL OR (${t.grantedAmount} > 0 AND ${t.grantedAmount} <= ${t.estimatedAmount})`,
+    ),
+    check(
+      'coverage_requests_patient_share',
+      sql`${t.grantedAmount} IS NULL OR ${t.patientShare} = ${t.estimatedAmount} - ${t.grantedAmount}`,
+    ),
+    // A grant sets the granted amount, the patient share and the validity date together.
+    check(
+      'coverage_requests_grant_complete',
+      sql`(${t.grantedAmount} IS NULL) = (${t.patientShare} IS NULL) AND (${t.grantedAmount} IS NULL) = (${t.validUntil} IS NULL)`,
+    ),
+  ],
+);
+
+/** Acts asked for; code, label and price are copied at entry, so later price changes keep them. */
+export const coverageRequestItems = pgTable(
+  'coverage_request_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    coverageRequestId: uuid('coverage_request_id')
+      .notNull()
+      .references(() => coverageRequests.id),
+    actCode: text('act_code')
+      .notNull()
+      .references(() => medicalActs.code),
+    actLabel: text('act_label').notNull(),
+    quantity: integer('quantity').notNull(),
+    unitPrice: integer('unit_price').notNull(),
+    lineAmount: integer('line_amount').notNull(),
+    position: integer('position').notNull(),
+  },
+  (t) => [
+    index().on(t.coverageRequestId),
+    check('coverage_request_items_quantity', sql`${t.quantity} >= 1`),
+    check('coverage_request_items_unit_price', sql`${t.unitPrice} > 0`),
+    check(
+      'coverage_request_items_line_amount',
+      sql`${t.lineAmount} = ${t.quantity} * ${t.unitPrice}`,
+    ),
+  ],
+);
+
+/**
+ * History of a request's statuses, with the reason given. Append-only: a trigger (migration
+ * 0014) rejects UPDATE and DELETE. `actor_user_id` is null for system moves (expiry, billing).
+ */
+export const coverageRequestEvents = pgTable(
+  'coverage_request_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    coverageRequestId: uuid('coverage_request_id')
+      .notNull()
+      .references(() => coverageRequests.id),
+    fromStatus: coverageRequestStatus('from_status'),
+    toStatus: coverageRequestStatus('to_status').notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    reason: text('reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.coverageRequestId, t.createdAt)],
 );
 
 /** Append-only: a database trigger rejects UPDATE and DELETE (see migrations). */
