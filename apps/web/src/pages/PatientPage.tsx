@@ -6,6 +6,8 @@ import { today } from '@medical-ins/shared';
 import { AffiliationsTable } from '@/components/affiliations/affiliations-table';
 import { AppointmentsTable } from '@/components/appointments/appointments-table';
 import { BookAppointmentDialog } from '@/components/appointments/book-appointment-dialog';
+import { ConsultationsTable } from '@/components/consultations/consultations-table';
+import { StartConsultationDialog } from '@/components/consultations/start-consultation-dialog';
 import { DeclareAffiliationDialog } from '@/components/affiliations/declare-affiliation-dialog';
 import { ErrorAlert } from '@/components/error-alert';
 import { PatientForm } from '@/components/patients/patient-form';
@@ -14,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
 import { usePatientAffiliations } from '@/lib/affiliations';
 import { useAppointments } from '@/lib/appointments';
+import { usePatientConsultations } from '@/lib/consultations';
 import { formatDate } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
 import { useCenterParam } from '@/lib/use-center-param';
@@ -78,6 +81,13 @@ function PatientDetails({
           centerId={centerId}
           patient={patient.data}
           canManage={canIn(user, centerId, 'appointment.manage')}
+        />
+      )}
+      {patient.data && canIn(user, centerId, 'medical_record.read') && (
+        <ConsultationsCard
+          centerId={centerId}
+          patientId={patientId}
+          canWrite={canIn(user, centerId, 'medical_record.write')}
         />
       )}
       {patient.data && (
@@ -193,6 +203,35 @@ function AppointmentsCard({
             showDate
             showPatient={false}
           />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConsultationsCard({
+  centerId,
+  patientId,
+  canWrite,
+}: {
+  centerId: string;
+  patientId: string;
+  canWrite: boolean;
+}) {
+  const consultations = usePatientConsultations(centerId, patientId);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Consultations</CardTitle>
+        {canWrite && <StartConsultationDialog centerId={centerId} patientId={patientId} />}
+      </CardHeader>
+      <CardContent>
+        {consultations.error && <ErrorAlert error={consultations.error} />}
+        {consultations.data?.length === 0 && (
+          <p className="text-muted-foreground">Aucune consultation.</p>
+        )}
+        {consultations.data && consultations.data.length > 0 && (
+          <ConsultationsTable centerId={centerId} consultations={consultations.data} />
         )}
       </CardContent>
     </Card>

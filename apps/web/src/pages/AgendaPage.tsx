@@ -58,6 +58,7 @@ export function AgendaPage() {
         date={date}
         doctorId={doctorId === ALL ? undefined : doctorId}
         canManage={canManage}
+        consultAs={canIn(user, centerId, 'medical_record.write') ? user.id : undefined}
       />
     </section>
   );
@@ -95,11 +96,13 @@ function DayAppointments({
   date,
   doctorId,
   canManage,
+  consultAs,
 }: {
   centerId: string;
   date: string;
   doctorId?: string;
   canManage: boolean;
+  consultAs?: string;
 }) {
   const appointments = useAppointments(centerId, { ...dayRange(date), doctorId });
   if (appointments.error) return <ErrorAlert error={appointments.error} />;
@@ -108,6 +111,11 @@ function DayAppointments({
     return <p className="text-muted-foreground">Aucun rendez-vous ce jour.</p>;
   }
   return (
-    <AppointmentsTable centerId={centerId} appointments={appointments.data} canManage={canManage} />
+    <AppointmentsTable
+      centerId={centerId}
+      appointments={appointments.data}
+      canManage={canManage}
+      consultAs={consultAs}
+    />
   );
 }
