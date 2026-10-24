@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
 import { today } from '@medical-ins/shared';
 import { AffiliationsTable } from '@/components/affiliations/affiliations-table';
+import { AppointmentsTable } from '@/components/appointments/appointments-table';
+import { BookAppointmentDialog } from '@/components/appointments/book-appointment-dialog';
 import { DeclareAffiliationDialog } from '@/components/affiliations/declare-affiliation-dialog';
 import { ErrorAlert } from '@/components/error-alert';
 import { PatientForm } from '@/components/patients/patient-form';
@@ -11,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { canIn } from '@/lib/centers';
 import { usePatientAffiliations } from '@/lib/affiliations';
+import { useAppointments } from '@/lib/appointments';
 import { formatDate } from '@/lib/format';
 import { usePatient, useUpdatePatient } from '@/lib/patients';
 import { useCenterParam } from '@/lib/use-center-param';
@@ -69,6 +72,13 @@ function PatientDetails({
             )}
           </CardContent>
         </Card>
+      )}
+      {patient.data && canIn(user, centerId, 'appointment.read') && (
+        <AppointmentsCard
+          centerId={centerId}
+          patient={patient.data}
+          canManage={canIn(user, centerId, 'appointment.manage')}
+        />
       )}
       {patient.data && (
         <AffiliationsCard
@@ -151,5 +161,40 @@ function EditPatient({
         onSubmit={(values) => update.mutate(values, { onSuccess: onDone })}
       />
     </div>
+  );
+}
+
+function AppointmentsCard({
+  centerId,
+  patient,
+  canManage,
+}: {
+  centerId: string;
+  patient: Patient;
+  canManage: boolean;
+}) {
+  const appointments = useAppointments(centerId, { patientId: patient.id });
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Rendez-vous</CardTitle>
+        {canManage && <BookAppointmentDialog centerId={centerId} patient={patient} />}
+      </CardHeader>
+      <CardContent>
+        {appointments.error && <ErrorAlert error={appointments.error} />}
+        {appointments.data?.length === 0 && (
+          <p className="text-muted-foreground">Aucun rendez-vous.</p>
+        )}
+        {appointments.data && appointments.data.length > 0 && (
+          <AppointmentsTable
+            centerId={centerId}
+            appointments={appointments.data}
+            canManage={canManage}
+            showDate
+            showPatient={false}
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
