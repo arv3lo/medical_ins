@@ -1,5 +1,6 @@
--- Starter set of frequent ICD-10 codes, labels written for this project. The full reference is
--- imported later by the super admin (roadmap P1.5); this upsert-safe insert never overrides it.
+-- Starter set of frequent ICD-10 codes. The labels follow the French ICD-10 wording (WHO / ATIH
+-- CIM-10); the source and its license must be confirmed before the full table is imported by the
+-- super admin (roadmap P1.5). This upsert-safe insert never overrides that import.
 INSERT INTO icd10_codes (code, label) VALUES
   ('A00.9', 'Choléra, sans précision'),
   ('A01.0', 'Fièvre typhoïde'),
