@@ -108,7 +108,7 @@ lecture.
   {
     "id": "…",
     "status": "…",
-    "centerId": "…",
+    "center": { "id": "…", "name": "…" },
     "insurer": { "id": "…", "name": "…" },
     "patient": {
       "id": "…",
@@ -149,9 +149,9 @@ lecture.
   }
   ```
 
-- **Assureur** (`coverage_request.decide`) : même forme, sans `centerId` mais avec
-  `center: { id, name }`, et `createdBy: { fullName }` seulement. Sélectionnée par une projection
-  explicite. 404 sur un brouillon.
+- **Assureur** (`coverage_request.decide`) : la même forme. Tout ce qu'elle contient sert la décision
+  (FR-012), y compris le nom du médecin demandeur. Elle est sélectionnée colonne par colonne,
+  jamais par une table entière. 404 sur un brouillon.
 - Audit : `medical_record.read` (`entityType: 'coverage_request'`), dans la même transaction que
   la lecture.
 
@@ -161,8 +161,9 @@ lecture.
 
 - **Centre** : les demandes du centre. **Assureur** : celles qui lui sont adressées, hors
   brouillons.
-- Réponse : `[{ id, status, patient: { lastName, firstNames }, insurer|center: { name },
-estimatedAmount, grantedAmount, validUntil, updatedAt }]`, sans diagnostic ni lignes. Pages de 50,
+- Réponse : une liste de demandes, de la même forme des deux côtés, sans diagnostic ni lignes :
+  `id`, `status`, `estimatedAmount`, `grantedAmount`, `validUntil`, `updatedAt`, plus
+  `patient: { lastName, firstNames }`, `center: { name }` et `insurer: { name }`. Pages de 50,
   triées par `updatedAt` décroissant.
 - Audit : `medical_record.read` (`entityType: 'coverage_request'`), avec `{ coverageRequestIds }`
   (FR-013).
