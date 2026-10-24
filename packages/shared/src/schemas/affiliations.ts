@@ -60,6 +60,7 @@ export type Affiliation = {
   endsOn: string | null;
   status: AffiliationStatus;
   rejectionReason: string | null;
+  declaredByOrganizationId: string;
 };
 
 /** What an insurer sees of an affiliation: the person's identity, never medical content. */

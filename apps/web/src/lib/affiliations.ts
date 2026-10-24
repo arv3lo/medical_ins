@@ -38,6 +38,18 @@ export function useDeclareAffiliation(centerId: string, patientId: string) {
   });
 }
 
+export function useWithdrawAffiliation(centerId: string, patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (affiliationId: string) =>
+      api<Affiliation>(`${patientBase(centerId, patientId)}/${affiliationId}/withdraw`, {
+        method: 'POST',
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['affiliations', centerId, patientId] }),
+  });
+}
+
 export function useInsuredAffiliations(insurerId: string, status: AffiliationStatus) {
   return useQuery({
     queryKey: ['insured', insurerId, status],
