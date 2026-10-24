@@ -136,7 +136,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
   - Dépend de : P0
   - Livre : table `patients` (nom, prénoms, date de naissance, sexe, CIN facultatif, téléphone,
     adresse, région) ; `POST /api/organizations/:orgId/patients`,
-    `GET /api/organizations/:orgId/patients?q=` (nom, CIN, téléphone, numéro d'assuré),
+    `GET /api/organizations/:orgId/patients?q=` (nom, CIN, téléphone),
     `GET/PATCH /api/organizations/:orgId/patients/:id` ; écrans liste/recherche et fiche.
   - Règles : le patient est partagé entre centres (dossier unique) ; un centre le voit dès qu'il
     a créé le patient, pris un rendez-vous ou fait une consultation pour lui (table
@@ -150,7 +150,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
   - Dépend de : P2.1, P1.6 (à défaut, régime saisi en texte libre puis migré)
   - Livre : table `affiliations` (patient, assureur, régime, numéro d'assuré, statut titulaire
     ou ayant droit, titulaire lié, employeur, début, fin) ; ajout par l'accueil, validation par
-    l'assureur (`insured.manage`) ; `GET .../patients/:id/affiliations`.
+    l'assureur (`insured.manage`) ; `GET .../patients/:id/affiliations` ; la recherche de
+    patients (P2.1) trouve aussi par numéro d'assuré.
   - Acceptation : une affiliation n'est « active » qu'entre ses dates et une fois validée ;
     un numéro d'assuré est unique par assureur ; l'assureur ne voit que les affiliations à
     son organisation, avec l'identité du patient mais sans contenu médical.
@@ -165,7 +166,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     passé ne peut plus être déplacé, seulement clos.
 
 - [ ] **P2.4 Consultations** (en cours)
-  - Dépend de : P2.1, P2.3 (le rendez-vous est facultatif), P1.5 (CIM-10)
+  - Dépend de : P2.1, P2.3 (le rendez-vous est facultatif), P1.5 (CIM-10 ; à défaut, code
+    saisi et validé sur son format, puis relié à `icd10_codes` par une migration)
   - Livre : tables `consultations` (patient, centre, médecin, rendez-vous, motif, examen,
     constantes en JSON typé, notes, `signed_at`), `diagnoses` (code CIM-10, principal ou
     secondaire) ; création et édition en brouillon, signature ; avenant après signature
