@@ -102,6 +102,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     `GET /api/referentials/:kind?q=` utilisée par les formulaires.
   - Acceptation : import idempotent (upsert sur le code) ; recherche insensible aux accents
     (`unaccent` + index trigram) ; un import est audité avec le nombre de lignes.
+  - Base : extensions `unaccent` et `pg_trgm` ; `unaccent()` n'étant pas `IMMUTABLE`, l'index
+    passe par une fonction enveloppe immuable.
   - Note : la CIM-10 FR est diffusée par l'OMS / l'ATIH ; vérifier la licence avant d'en
     committer un extrait. Prévoir un petit jeu d'essai dans `apps/api/test/fixtures`.
 
@@ -118,8 +120,8 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     soumis à accord préalable, tarifs conventionnés), proposition par l'assureur, acceptation
     par l'admin du centre.
   - Acceptation : une seule convention active par couple centre/assureur à une date donnée
-    (contrainte d'exclusion sur la période) ; les deux parties voient la convention ; changement
-    de statut audité.
+    (contrainte d'exclusion sur la période, extension `btree_gist`) ; les deux parties voient
+    la convention ; changement de statut audité.
 
 - [ ] **P1.8 Consultation du journal d'audit**
   - Dépend de : P0
@@ -165,7 +167,7 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
     prévu, arrivé, annulé, absent, terminé) ; CRUD pour `appointment.manage` ; agenda du jour
     et de la semaine par médecin ; liste « mes rendez-vous » pour le médecin.
   - Acceptation : pas de chevauchement pour un même médecin (contrainte d'exclusion
-    `tstzrange`) ; le médecin doit être membre du centre avec le rôle `doctor` ; un rendez-vous
+    `tstzrange`, extension `btree_gist`) ; le médecin doit être membre du centre avec le rôle `doctor` ; un rendez-vous
     passé ne peut plus être déplacé, seulement clos.
 
 - [ ] **P2.4 Consultations** (en cours)
