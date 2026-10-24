@@ -36,6 +36,20 @@
       "when": 1792859711532,
       "tag": "0004_affiliations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792860272946,
+      "tag": "0005_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792860274120,
+      "tag": "0006_appointments_no_overlap",
+      "breakpoints": true
     }
   ]
 }

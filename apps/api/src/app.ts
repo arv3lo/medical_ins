@@ -8,6 +8,7 @@ import type { Db } from './db/client.js';
 import type { Env } from './env.js';
 import { HttpError } from './lib/errors.js';
 import { affiliationRoutes } from './modules/affiliations/routes.js';
+import { appointmentRoutes } from './modules/appointments/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { organizationRoutes } from './modules/organizations/routes.js';
 import { patientRoutes } from './modules/patients/routes.js';
@@ -50,6 +51,7 @@ export async function buildApp({ db, env }: { db: Db; env: Env }) {
   userRoutes(app, { db });
   patientRoutes(app, { db });
   affiliationRoutes(app, { db });
+  appointmentRoutes(app, { db });
 
   return app;
 }
