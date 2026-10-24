@@ -13,8 +13,7 @@ RUN pnpm --filter @medical-ins/api build \
 
 FROM node:22-slim
 WORKDIR /app
-ENV NODE_ENV=production \
-    MIGRATIONS_DIR=/app/drizzle
+ENV NODE_ENV=production
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/package.json ./
 COPY --from=build /repo/apps/api/dist ./dist
