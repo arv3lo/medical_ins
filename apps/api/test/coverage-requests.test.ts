@@ -111,6 +111,17 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: drafts and submission', 
       expect((await f.create(f.doctor, { diagnosisCode: 'Z99.9' })).statusCode).toBe(404);
     });
 
+    it('refuses a total too large to store, with a message instead of a crash', async () => {
+      // 30 × 100 caesareans at their reference price: 3.6 billion Ar.
+      const items = Array.from({ length: 30 }, () => ({ actCode: 'ACC-CESAR', quantity: 100 }));
+      const response = await f.create(f.doctor, { items });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toMatch(/montant/i);
+      const id = await f.draft();
+      const patch = await f.inject('PATCH', `${f.base()}/${id}`, f.doctor, { items });
+      expect(patch.statusCode).toBe(400);
+    });
+
     it('is for the doctors of the center only', async () => {
       await createUser(ctx.db, {
         email: 'root@example.mg',

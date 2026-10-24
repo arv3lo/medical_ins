@@ -1,7 +1,8 @@
-import type {
-  CoverageRequestStatus,
-  CreateCoverageRequestInput,
-  UpdateCoverageRequestInput,
+import {
+  type CoverageRequestStatus,
+  type CreateCoverageRequestInput,
+  MAX_REQUEST_AMOUNT,
+  type UpdateCoverageRequestInput,
 } from '@medical-ins/shared';
 import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -112,7 +113,12 @@ async function priceItems(db: Db | Tx, items: CreateCoverageRequestInput['items'
 
 type PricedItem = Awaited<ReturnType<typeof priceItems>>[number];
 
-const total = (items: PricedItem[]) => items.reduce((sum, i) => sum + i.lineAmount, 0);
+/** The estimate, refused rather than overflowing the database's integers. */
+function total(items: PricedItem[]): number {
+  const sum = items.reduce((acc, i) => acc + i.lineAmount, 0);
+  if (sum > MAX_REQUEST_AMOUNT) throw new HttpError(400, 'Montant total de la demande trop élevé');
+  return sum;
+}
 
 /** A draft for a patient of `centerId`; the insurer is always the affiliation's. */
 export async function insertCoverageRequest(

@@ -135,11 +135,23 @@ export function transitionProblem(
   return null;
 }
 
+/**
+ * Amounts are stored as 32-bit integers (max 2 147 483 647). These bounds keep every line under
+ * that limit; the server also checks the total, since a line may take the act's reference price.
+ */
+export const MAX_ITEM_QUANTITY = 100;
+export const MAX_UNIT_PRICE = 20_000_000;
+export const MAX_REQUEST_AMOUNT = 2_000_000_000;
+
 /** A line asked for; without `unitPrice`, the act's reference price applies. */
 export const coverageRequestItemInputSchema = z.object({
   actCode: z.string().trim().toUpperCase().min(1).max(30),
-  quantity: z.number().int('Quantité entière').min(1, 'Quantité invalide'),
-  unitPrice: amountSchema.optional(),
+  quantity: z
+    .number()
+    .int('Quantité entière')
+    .min(1, 'Quantité invalide')
+    .max(MAX_ITEM_QUANTITY, `Quantité limitée à ${MAX_ITEM_QUANTITY}`),
+  unitPrice: amountSchema.max(MAX_UNIT_PRICE, 'Tarif unitaire trop élevé').optional(),
 });
 
 const itemsSchema = z

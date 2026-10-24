@@ -158,6 +158,14 @@ describe('createCoverageRequestInputSchema', () => {
     expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 1.5 }] })).toBe(false);
     expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 1, unitPrice: 0 }] })).toBe(false);
     expect(ok({ ...draft, diagnosisCode: 'paludisme' })).toBe(false);
+    // Bounded so that one line always fits the database's integers.
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 101 }] })).toBe(false);
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 1, unitPrice: 20_000_001 }] })).toBe(
+      false,
+    );
+    expect(
+      ok({ ...draft, items: [{ actCode: 'ECG', quantity: 100, unitPrice: 20_000_000 }] }),
+    ).toBe(true);
   });
 });
 
