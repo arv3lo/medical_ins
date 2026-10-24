@@ -86,3 +86,13 @@ database: lint, typecheck, Prettier, build, and 55 shared + 54 web + 137 API tes
 | 7   | Fixed: the list maps `updatedAt` through `iso()` like the detail                                                                                                                               | `edd8c46` |
 
 The spec's research and contract were updated to match 1 and 2 (`b00eae4`).
+
+### Follow-up, after checking the fixes
+
+| #   | Finding                                                                                                                                                                                                                         | Outcome                                                                                                                             | Commit    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 8   | `updateCoverageRequest` wrote the lines before `total()` ran, and reference prices are unbounded: 100 × an act above ~21.4 M Ar overflowed `line_amount` on the insert (500). The bounds comment claimed every line was covered | Fixed: the total (which covers every line) is checked before any line is written; comment corrected. Test first: 500 before the fix | `0557313` |
+| 9   | `MAX_ITEM_QUANTITY` and `MAX_UNIT_PRICE` were exported with no importer (YAGNI)                                                                                                                                                 | Fixed: private to the schema; `MAX_REQUEST_AMOUNT` stays exported for the API                                                       | `8b6256f` |
+
+Final run on the emptied test database: lint, typecheck, Prettier, build, and 55 shared + 54 web +
+138 API tests.
