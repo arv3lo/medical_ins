@@ -22,7 +22,11 @@ const patientParams = z.object({ orgId: z.string().uuid(), patientId: z.string()
 const insurerParams = z.object({ orgId: z.string().uuid() });
 const affiliationParams = insurerParams.extend({ affiliationId: z.string().uuid() });
 const patientAffiliationParams = patientParams.extend({ affiliationId: z.string().uuid() });
-const insurerQuery = z.object({ status: z.enum(AFFILIATION_STATUSES).optional() });
+const insurerQuery = z.object({
+  status: z.enum(AFFILIATION_STATUSES).optional(),
+  memberNumber: z.string().trim().max(50).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 const PATIENT_AFFILIATIONS = '/api/organizations/:orgId/patients/:patientId/affiliations';
 const INSURER_AFFILIATIONS = '/api/organizations/:orgId/affiliations';
@@ -89,8 +93,7 @@ export function affiliationRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     const { orgId } = insurerParams.parse(request.params);
     requirePermission(request, orgId, 'insured.manage');
     await requireInsurer(db, orgId);
-    const { status } = insurerQuery.parse(request.query);
-    return listInsurerAffiliations(db, orgId, status);
+    return listInsurerAffiliations(db, orgId, insurerQuery.parse(request.query));
   });
 
   /** `readDecision` parses the body, so it only runs once access is checked. */

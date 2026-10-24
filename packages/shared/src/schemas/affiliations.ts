@@ -42,6 +42,9 @@ export const createAffiliationInputSchema = z
   });
 export type CreateAffiliationInput = z.infer<typeof createAffiliationInputSchema>;
 
+/** The insurer list comes in pages of this size; a shorter page is the last one. */
+export const INSURED_PAGE_SIZE = 50;
+
 export const rejectAffiliationInputSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });

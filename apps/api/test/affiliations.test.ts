@@ -1,7 +1,7 @@
-import type { Role } from '@medical-ins/shared';
+import { INSURED_PAGE_SIZE, type Role } from '@medical-ins/shared';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, organizations } from '../src/db/schema.js';
+import { affiliations, auditLogs, organizations } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helpers.js';
 
 describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
@@ -257,6 +257,35 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       'lastName',
       'nationalId',
     ]);
+  });
+
+  it('pages the insurer list and filters it by member number', async () => {
+    await ctx.db.insert(affiliations).values(
+      Array.from({ length: INSURED_PAGE_SIZE + 1 }, (_, i) => ({
+        patientId,
+        insurerId: ostie,
+        memberNumber: `N-${String(i).padStart(3, '0')}`,
+        holderStatus: 'holder' as const,
+        startsOn: '2026-01-01',
+        declaredByOrganizationId: center,
+      })),
+    );
+    const manager = await as('insurer_manager', ostie);
+    const list = (query: string) =>
+      inject('GET', `/api/organizations/${ostie}/affiliations?status=pending&${query}`, manager);
+
+    const first = (await list('')).json<{ memberNumber: string }[]>();
+    expect(first).toHaveLength(INSURED_PAGE_SIZE);
+    const next = (await list(`offset=${INSURED_PAGE_SIZE}`)).json<{ memberNumber: string }[]>();
+    expect(next).toHaveLength(1);
+    expect(first.map((a) => a.memberNumber)).not.toContain(next[0]!.memberNumber);
+
+    // A prefix, whatever the case; LIKE wildcards match literally.
+    const found = (await list('memberNumber=n-01')).json<{ memberNumber: string }[]>();
+    expect(found.map((a) => a.memberNumber).sort()).toEqual(
+      Array.from({ length: 10 }, (_, i) => `N-01${i}`),
+    );
+    expect((await list('memberNumber=N-%25')).json()).toEqual([]);
   });
 
   it('lets only the insurer manager validate or reject, audited', async () => {

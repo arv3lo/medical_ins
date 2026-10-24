@@ -1,8 +1,13 @@
-import type { AffiliationStatus, CreateAffiliationInput } from '@medical-ins/shared';
-import { and, desc, eq, getTableColumns, type SQL } from 'drizzle-orm';
+import {
+  INSURED_PAGE_SIZE,
+  type AffiliationStatus,
+  type CreateAffiliationInput,
+} from '@medical-ins/shared';
+import { and, asc, desc, eq, getTableColumns, ilike, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { affiliations, organizations, patients } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
+import { escapeLike } from '../../lib/sql.js';
 
 export async function requireInsurer(db: Db | Tx, organizationId: string): Promise<void> {
   const organization = await db.query.organizations.findFirst({
@@ -44,18 +49,32 @@ const insurerView = {
   },
 };
 
-export function listInsurerAffiliations(db: Db, insurerId: string, status?: AffiliationStatus) {
-  return db
-    .select(insurerView)
-    .from(affiliations)
-    .innerJoin(patients, eq(patients.id, affiliations.patientId))
-    .where(
-      and(
-        eq(affiliations.insurerId, insurerId),
-        status ? eq(affiliations.status, status) : undefined,
-      ),
-    )
-    .orderBy(affiliations.createdAt);
+/** One page of the insurer's list, oldest declaration first; `memberNumber` is a prefix. */
+export function listInsurerAffiliations(
+  db: Db,
+  insurerId: string,
+  filters: { status?: AffiliationStatus; memberNumber?: string; offset: number },
+) {
+  const { status, memberNumber, offset } = filters;
+  return (
+    db
+      .select(insurerView)
+      .from(affiliations)
+      .innerJoin(patients, eq(patients.id, affiliations.patientId))
+      .where(
+        and(
+          eq(affiliations.insurerId, insurerId),
+          status ? eq(affiliations.status, status) : undefined,
+          memberNumber
+            ? ilike(affiliations.memberNumber, `${escapeLike(memberNumber)}%`)
+            : undefined,
+        ),
+      )
+      // The id breaks ties, so that a page boundary is stable.
+      .orderBy(asc(affiliations.createdAt), asc(affiliations.id))
+      .limit(INSURED_PAGE_SIZE)
+      .offset(offset)
+  );
 }
 
 export async function insertAffiliation(
