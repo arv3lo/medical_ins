@@ -152,10 +152,10 @@ export const affiliations = pgTable(
     ...timestamps,
   },
   (t) => [
-    // Dependents carry their holder's number, so only holders make a number unique.
-    uniqueIndex('affiliations_holder_member_number_unique')
-      .on(t.insurerId, t.memberNumber)
-      .where(sql`${t.holderStatus} = 'holder'`),
+    // One holder number at one insurer belongs to one patient, who may hold several periods:
+    // the exclusion constraint affiliations_holder_member_number_excl (hand-written migration
+    // 0006, Drizzle cannot express EXCLUDE). Dependents carry their holder's number, and
+    // rejected or withdrawn declarations hold nothing.
     index().on(t.patientId),
     index().on(t.insurerId, t.status),
     check('affiliations_dates_check', sql`${t.endsOn} IS NULL OR ${t.endsOn} >= ${t.startsOn}`),

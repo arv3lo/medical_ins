@@ -57,6 +57,39 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       },
     });
 
+  const createPatient = async (lastName: string) => {
+    const created = await ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${center}/patients`,
+      headers: { cookie: reception },
+      payload: { lastName, firstNames: 'Marie', birthDate: '1990-01-01', sex: 'female' },
+    });
+    return created.json<{ id: string }>().id;
+  };
+
+  /** Declares OSTIE's holder number OS-123456 for `forPatient`, from the first center. */
+  const declareHolder = (forPatient: string, payload: Record<string, unknown> = {}) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${center}/patients/${forPatient}/affiliations`,
+      headers: { cookie: reception },
+      payload: {
+        insurerId: ostie,
+        memberNumber: 'OS-123456',
+        holderStatus: 'holder',
+        startsOn: '2026-01-01',
+        ...payload,
+      },
+    });
+
+  const decideAs = async (affiliationId: string, decision: 'validate' | 'reject') =>
+    inject(
+      'POST',
+      `/api/organizations/${ostie}/affiliations/${affiliationId}/${decision}`,
+      await as('insurer_manager', ostie),
+      decision === 'reject' ? { reason: 'Numéro inconnu' } : undefined,
+    );
+
   /** Waits until `count` other sessions are blocked on a lock held by the test. */
   const waitForLockWaiters = async (count: number) => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -131,6 +164,25 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       holderStatus: 'holder',
     });
     expect(elsewhere.statusCode).toBe(201);
+  });
+
+  it('frees a holder number once the insurer rejects the declaration', async () => {
+    const wrong = (await declareHolder(patientId)).json<{ id: string }>();
+    expect((await decideAs(wrong.id, 'reject')).statusCode).toBe(200);
+
+    // The real holder can now be declared, and so can a corrected declaration.
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(201);
+    expect((await declareHolder(patientId, { memberNumber: 'OS-654321' })).statusCode).toBe(201);
+  });
+
+  it('lets the same holder declare a new period, but no other patient', async () => {
+    const ended = (
+      await declareHolder(patientId, { startsOn: '2025-01-01', endsOn: '2025-12-31' })
+    ).json<{ id: string }>();
+    expect((await decideAs(ended.id, 'validate')).statusCode).toBe(200);
+
+    expect((await declareHolder(patientId, { startsOn: '2026-01-01' })).statusCode).toBe(201);
+    expect((await declareHolder(await createPatient('Rasoa'))).statusCode).toBe(409);
   });
 
   it('shows each insurer only its own affiliations, with identity but nothing medical', async () => {

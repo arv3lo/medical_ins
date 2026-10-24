@@ -55,6 +55,7 @@ export async function insertAffiliation(
   tx: Tx,
   values: CreateAffiliationInput & { patientId: string; declaredByOrganizationId: string },
 ) {
+  // DO NOTHING without a target also covers the holder number's exclusion constraint.
   const [created] = await tx.insert(affiliations).values(values).onConflictDoNothing().returning();
   if (!created) {
     throw new HttpError(
