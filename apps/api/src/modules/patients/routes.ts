@@ -9,11 +9,9 @@ import { z } from 'zod';
 import type { Db } from '../../db/client.js';
 import { patients } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
-import { HttpError, notFound } from '../../lib/errors.js';
+import { notFound } from '../../lib/errors.js';
 import { requirePermission } from '../../plugins/auth.js';
 import {
-  CIN_TAKEN,
-  findDuplicates,
   insertPatient,
   linkPatient,
   requireHealthCenter,
@@ -41,12 +39,6 @@ export function patientRoutes(app: FastifyInstance, { db }: { db: Db }): void {
     const actor = requirePermission(request, orgId, 'patient.create');
     await requireHealthCenter(db, orgId);
     const input = createPatientInputSchema.parse(request.body);
-
-    const { duplicates, sameNationalId } = await findDuplicates(db, input);
-    if (duplicates.length > 0) {
-      const message = sameNationalId ? CIN_TAKEN : 'Ce patient semble déjà enregistré';
-      throw new HttpError(409, message, { duplicates, sameNationalId });
-    }
 
     const patient = await db.transaction(async (tx) => {
       const created = await insertPatient(tx, orgId, input);
@@ -99,7 +91,7 @@ export function patientRoutes(app: FastifyInstance, { db }: { db: Db }): void {
 
     return db.transaction(async (tx) => {
       const before = await requireLinkedPatient(tx, orgId, patientId);
-      const after = await updatePatient(tx, patientId, input);
+      const after = await updatePatient(tx, before, input);
       await audit(tx, {
         actorUserId: actor.id,
         organizationId: orgId,

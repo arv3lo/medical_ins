@@ -1,7 +1,7 @@
 import type { Role } from '@medical-ins/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, memberships, organizations } from '../src/db/schema.js';
+import { auditLogs, memberships, organizations, patients } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, createUser, login, resetDb, setupTestApp } from './helpers.js';
 
 const rakoto = {
@@ -266,5 +266,55 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
       birthDate: '2023-02-30',
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('runs the duplicate check after a concurrent registration of the same person', async () => {
+    // Another registration of Rakoto, born 1985-03-12, holds the lock and has not committed yet.
+    let inserted!: () => void;
+    const ready = new Promise<void>((resolve) => (inserted = resolve));
+    const concurrent = ctx.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(lower('Rakoto') || '1985-03-12'))`,
+      );
+      await tx.insert(patients).values({ ...rakoto, nationalId: null, sex: 'male' });
+      inserted();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    await ready;
+
+    const response = await create(centerA, await as('reception', centerA), {
+      ...rakoto,
+      nationalId: null,
+    });
+    await concurrent;
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('flags a correction that turns a patient into one already registered', async () => {
+    const reception = await as('reception', centerA);
+    const existing = (await create(centerA, reception)).json<{ id: string }>();
+    const other = (
+      await create(centerA, reception, {
+        ...rakoto,
+        lastName: 'Rabe',
+        birthDate: '1990-01-01',
+        nationalId: null,
+      })
+    ).json<{ id: string }>();
+
+    const response = await update(centerA, other.id, reception, {
+      lastName: 'RAKOTO',
+      birthDate: rakoto.birthDate,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      message: 'Ce patient semble déjà enregistré',
+      sameNationalId: false,
+      duplicates: [{ id: existing.id }],
+    });
+    // Unchanged name and birth date: a homonym can still be corrected.
+    expect((await update(centerA, existing.id, reception, { lastName: 'Rakoto' })).statusCode).toBe(
+      200,
+    );
   });
 });
