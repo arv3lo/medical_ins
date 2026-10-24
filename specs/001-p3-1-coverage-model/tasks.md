@@ -182,7 +182,7 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
 
 ### Tests (à écrire d'abord, vus en échec)
 
-- [ ] T022 [US3] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
+- [X] T022 [US3] Tests d'intégration dans `apps/api/test/coverage-request-transitions.test.ts` :
   - `under_review` par le médecin conseil de l'assureur destinataire ;
   - l'accord total de 70 000 sur 70 000 donne `patientShare` 0 ;
   - l'accord partiel de 50 000 avec motif donne `patientShare` 20 000 ;
@@ -192,7 +192,7 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
   - le médecin conseil d'un autre assureur reçoit 404 ;
   - le médecin conseil sur un brouillon reçoit 404 ;
   - une affiliation retirée, ou dont `endsOn` est passé, après la soumission : la décision reste possible (200), et le GET assureur montre le statut actuel de l'affiliation.
-- [ ] T023 [P] [US3] Tests de lecture dans `apps/api/test/coverage-requests.test.ts` :
+- [X] T023 [P] [US3] Tests de lecture dans `apps/api/test/coverage-requests.test.ts` :
   - `GET …/:id` côté centre : forme complète du contrat ;
   - côté assureur : forme assureur avec `center: { id, name }` ; les clés de premier niveau sont exactement celles du contrat ; aucune donnée de consultation ni d'autre demande ;
   - brouillon côté assureur : 404 ;
@@ -204,11 +204,11 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
 
 ### Implémentation
 
-- [ ] T024 [US3] Étendre `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` pour `granted` : poser `granted_amount`, `patient_share = estimated − granted` et `valid_until`, et ajouter `{ grantedAmount, validUntil }` au payload d'audit.
-- [ ] T025 [US3] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
+- [X] T024 [US3] Étendre `applyTransition` dans `apps/api/src/modules/coverage-requests/transitions.ts` pour `granted` : poser `granted_amount`, `patient_share = estimated − granted` et `valid_until`, et ajouter `{ grantedAmount, validUntil }` au payload d'audit.
+- [X] T025 [US3] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
   - `findCoverageRequestForCenter` et `findCoverageRequestForInsurer` : sélections explicites selon le contrat, avec diagnostic (code et libellé), lignes triées par `position` et événements triés par `created_at` ;
   - `listCoverageRequests(tx, { orgId, side, status?, patientId?, offset })`.
-- [ ] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `medical_record.read` (`entityType: 'coverage_request'`) est écrit dans la même transaction que la lecture.
+- [X] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `medical_record.read` (`entityType: 'coverage_request'`) est écrit dans la même transaction que la lecture.
 
 **Point de contrôle** : le cycle soumission → examen → décision passe par l'API, et les tests
 T022 et T023 sont verts.
