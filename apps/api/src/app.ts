@@ -15,8 +15,8 @@ import { registerAuth } from './plugins/auth.js';
 export async function buildApp({ db, env }: { db: Db; env: Env }) {
   const app = Fastify({
     logger: env.NODE_ENV === 'test' ? false : { level: 'info' },
-    // Behind Caddy in docker-compose: trust X-Forwarded-For for request.ip.
-    trustProxy: true,
+    // request.ip keys the login rate limit and the audit log: trust only known proxy hops.
+    trustProxy: (_address, hop) => hop < env.TRUST_PROXY_HOPS,
   });
 
   await app.register(helmet);

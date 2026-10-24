@@ -55,6 +55,23 @@ describe.skipIf(!TEST_DATABASE_URL)('auth', () => {
     }
   });
 
+  it('ignores X-Forwarded-For when no proxy is trusted', async () => {
+    const attempt = (forwardedFor: string) =>
+      ctx.app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        // Own address: the rate limit counts per IP and other tests log in from 127.0.0.1.
+        remoteAddress: '192.0.2.1',
+        headers: { 'x-forwarded-for': forwardedFor },
+        payload: { email: 'doc@example.mg', password: 'wrong' },
+      });
+    for (let i = 0; i < 10; i++) expect((await attempt(`10.0.0.${i}`)).statusCode).toBe(401);
+    expect((await attempt('10.0.0.99')).statusCode).toBe(429);
+
+    const entries = await ctx.db.select({ ip: auditLogs.ip }).from(auditLogs);
+    expect(new Set(entries.map((e) => e.ip))).toEqual(new Set(['192.0.2.1']));
+  });
+
   it('logs in with a case-insensitive email, then logs out', async () => {
     const { cookie } = await login(ctx.app, 'DOC@example.mg', 'correct-horse');
 

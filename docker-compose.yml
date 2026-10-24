@@ -29,6 +29,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       API_PORT: 3000
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      # Only Caddy reaches the API (no published port).
+      TRUST_PROXY_HOPS: 1
       COOKIE_SECURE: 'true'
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
