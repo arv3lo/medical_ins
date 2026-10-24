@@ -88,9 +88,10 @@ Chaque décision ci-dessous réutilise un patron du dépôt plutôt que d'en inv
   - payloads : `{ from, to }` pour une transition, plus `{ grantedAmount, validUntil }` pour un
     accord. Pour une modification : `{ fields: [...] }` (noms des champs), sans diagnostic, sans
     libellé, sans motif ;
-  - lectures : `coverage_request.read`, avec `{ coverageRequestIds }` pour une liste. Une demande
-    porte un diagnostic, donc toute lecture est tracée (FR-013), comme `medical_record.read` en
-    P2.4.
+  - lectures : `medical_record.read`, comme en P2.4, avec `entityType: 'coverage_request'` (et
+    `{ coverageRequestIds }` pour une liste). Une demande porte un diagnostic : une seule action
+    pour toute lecture de contenu médical, pour qu'une requête sur `medical_record.read` les
+    retrouve toutes (revue PR #7, constat 28).
 - **Pourquoi** : principe I, et le même format que les audits de P2.4 corrigés par la revue.
 
 ## R7. Référentiel d'actes de départ (réponse Q1 : B)
@@ -126,7 +127,7 @@ Chaque décision ci-dessous réutilise un patron du dépôt plutôt que d'en inv
     - affiliation : numéro, qualité, régime, dates, statut actuel ;
     - diagnostic : code et libellé ;
     - les lignes, les montants, la date limite et l'historique ;
-    - jamais l'auteur côté centre au-delà de son nom, ni rien d'autre du dossier ;
+    - le nom du médecin demandeur (rien d'autre sur lui), et rien d'autre du dossier ;
   - une demande d'une autre organisation répond 404 (FR-014).
 
 ## R9. Opérations exposées (réponse Q2 : A)

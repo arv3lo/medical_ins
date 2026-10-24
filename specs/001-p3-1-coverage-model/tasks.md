@@ -40,13 +40,19 @@ US5) ; les phases suivent la priorité : US1, US2, US3 et US5 (P1), puis US4 (P2
 
 **⚠️** Aucun récit ne commence avant la fin de cette phase.
 
-- [ ] T002 Ajouter à `apps/api/src/db/schema.ts` :
-  - l'énumération `coverage_request_status` (`draft`, `submitted`, `under_review`, `granted`, `rejected`, `info_requested`, `used`, `billed`, `cancelled`, `expired`), dont les valeurs viennent de `COVERAGE_REQUEST_STATUSES` (T007) ;
+- [ ] T002 Squelette partagé `packages/shared/src/schemas/coverage-requests.ts` :
+  - `COVERAGE_REQUEST_STATUSES` et le type `CoverageRequestStatus` ;
+  - `COVERAGE_REQUEST_STATUS_LABELS` (brouillon, soumise, en examen, accordée, refusée, complément demandé, utilisée, facturée, annulée, expirée) ;
+  - `FINAL_STATUSES` (`rejected`, `cancelled`, `expired`, `billed`) ;
+  - le type `CoverageRequestActor = 'center' | 'insurer' | 'system'` ;
+  - l'export depuis `packages/shared/src/index.ts`.
+- [ ] T003 Ajouter à `apps/api/src/db/schema.ts` :
+  - l'énumération `coverage_request_status` (`draft`, `submitted`, `under_review`, `granted`, `rejected`, `info_requested`, `used`, `billed`, `cancelled`, `expired`), dont les valeurs viennent de `COVERAGE_REQUEST_STATUSES` (T002) ;
   - la table `medical_acts` : `code` text PK, `label` text non nul, `reference_price` integer non nul avec CHECK `> 0`.
 
   Ces deux éléments servent tous les récits.
 
-- [ ] T003 Ajouter `coverage_requests` à `apps/api/src/db/schema.ts`, colonnes et index exactement comme dans `data-model.md` :
+- [ ] T004 Ajouter `coverage_requests` à `apps/api/src/db/schema.ts`, colonnes et index exactement comme dans `data-model.md` :
   - FK `center_id`, `insurer_id`, `patient_id`, `affiliation_id`, `diagnosis_code` (→ `icd10_codes`) et `created_by` ;
   - `estimated_amount` integer non nul `≥ 0` ;
   - `granted_amount` et `patient_share` integer nullables ;
@@ -56,26 +62,20 @@ US5) ; les phases suivent la priorité : US1, US2, US3 et US5 (P1), puis US4 (P2
   - CHECK `patient_share = estimated_amount − granted_amount` quand `granted_amount` est posé ;
   - CHECK « `granted_amount`, `patient_share` et `valid_until` posés ensemble » ;
   - index `(center_id, status)`, `(insurer_id, status)` et `(patient_id)`.
-- [ ] T004 Ajouter `coverage_request_items` à `apps/api/src/db/schema.ts` :
+- [ ] T005 Ajouter `coverage_request_items` à `apps/api/src/db/schema.ts` :
   - `act_code` FK → `medical_acts`, `act_label` text non nul ;
   - `quantity` CHECK `≥ 1`, `unit_price` CHECK `> 0` ;
   - `line_amount` CHECK `= quantity × unit_price` ;
   - `position` integer non nul ; index `(coverage_request_id)`.
-- [ ] T005 Ajouter `coverage_request_events` à `apps/api/src/db/schema.ts` :
+- [ ] T006 Ajouter `coverage_request_events` à `apps/api/src/db/schema.ts` :
   - `from_status` nullable, `to_status` non nul ;
   - `actor_user_id` FK nullable (nul pour `system`), `reason` text nullable ;
   - `created_at` défaut `now()` ; index `(coverage_request_id, created_at)` ;
-  - un commentaire qui renvoie au trigger d'ajout seul (T006).
-- [ ] T006 Générer les migrations dans `apps/api/drizzle/`, depuis la racine :
+  - un commentaire qui renvoie au trigger d'ajout seul (T007).
+- [ ] T007 Générer les migrations dans `apps/api/drizzle/`, depuis la racine :
   - `pnpm db:generate`, renommer en `0013_coverage_requests` (relire le SQL) ;
   - `pnpm --filter @medical-ins/api exec drizzle-kit generate --custom --name coverage_request_events_append_only`, avec un trigger qui rejette UPDATE et DELETE sur `coverage_request_events`, sur le modèle de `apps/api/drizzle/0011_consultations_read_only.sql` ;
   - `--custom --name medical_acts_starter` : une vingtaine d'actes courants (consultation générale, consultation spécialisée, échographie abdominale, radiographie thoracique, NFS, glycémie, TDR paludisme, ECG, accouchement par voie basse, césarienne, petite chirurgie, hospitalisation par jour…), avec codes locaux (`CONS-GEN`…), `INSERT … ON CONFLICT DO NOTHING`, et un en-tête qui dit que les tarifs sont **indicatifs, à valider par le propriétaire avant la production**.
-- [ ] T007 Squelette partagé `packages/shared/src/schemas/coverage-requests.ts` :
-  - `COVERAGE_REQUEST_STATUSES` et le type `CoverageRequestStatus` ;
-  - `COVERAGE_REQUEST_STATUS_LABELS` (brouillon, soumise, en examen, accordée, refusée, complément demandé, utilisée, facturée, annulée, expirée) ;
-  - `FINAL_STATUSES` (`rejected`, `cancelled`, `expired`, `billed`) ;
-  - le type `CoverageRequestActor = 'center' | 'insurer' | 'system'` ;
-  - l'export depuis `packages/shared/src/index.ts`.
 - [ ] T008 Squelette du module : `apps/api/src/modules/coverage-requests/routes.ts` (fonction `coverageRequestRoutes(app, { db })`, vide), `service.ts` et `transitions.ts`. Enregistrer les routes dans `apps/api/src/app.ts`, et ajouter `coverage_request_events`, `coverage_request_items` et `coverage_requests` au `TRUNCATE` de `resetDb` dans `apps/api/test/helpers.ts`, en ordre de dépendance, sans `medical_acts`, qui est un référentiel de migration.
 - [ ] T009 Vérifier que `pnpm typecheck`, `pnpm lint` et `pnpm test` passent (migrations `apps/api/drizzle/0013` à `0015` appliquées sur une base vide), puis committer les fondations. Les migrations et le schéma partent dans un commit `feat(api):` à part.
 
@@ -141,7 +141,7 @@ le montant estimé et l'historique par le GET.
     - 404 pour un patient non rattaché, une affiliation d'un autre patient, un acte ou un code inconnu ;
     - 403 pour l'accueil, le médecin conseil ou le super admin seul ;
     - 404 si `:orgId` n'est pas un centre ;
-  - **modification** : PATCH en `draft` ; `items` remplace les lignes et recalcule le montant ; audit `{ fields }` ; 409 hors `draft`/`info_requested` ;
+  - **modification** : PATCH en `draft` ; `items` remplace les lignes et recalcule le montant ; audit `{ fields }` ; 409 hors `draft`/`info_requested` ; un autre médecin du même centre modifie et soumet le brouillon d'un collègue (200, FR-009) ;
   - **soumission** (`POST …/transitions`, `{ to: 'submitted' }`) : 200 avec une affiliation validée et active ; 400 avec un message français pour une affiliation `pending`, `rejected`, `withdrawn` ou hors de ses dates.
 
 ### Implémentation
@@ -190,14 +190,16 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
   - `rejected` et `info_requested` sans motif répondent 400 ;
   - un médecin du centre qui tente `granted` reçoit 409 ;
   - le médecin conseil d'un autre assureur reçoit 404 ;
-  - le médecin conseil sur un brouillon reçoit 404.
+  - le médecin conseil sur un brouillon reçoit 404 ;
+  - une affiliation retirée, ou dont `endsOn` est passé, après la soumission : la décision reste possible (200), et le GET assureur montre le statut actuel de l'affiliation.
 - [ ] T023 [P] [US3] Tests de lecture dans `apps/api/test/coverage-requests.test.ts` :
   - `GET …/:id` côté centre : forme complète du contrat ;
   - côté assureur : forme assureur avec `center: { id, name }` ; les clés de premier niveau sont exactement celles du contrat ; aucune donnée de consultation ni d'autre demande ;
   - brouillon côté assureur : 404 ;
   - autre centre ou autre assureur : 404 ;
-  - infirmier, accueil ou facturation : 403 ;
-  - chaque lecture écrit `coverage_request.read` ;
+  - après le retrait de l'adhésion de l'auteur au centre, un autre médecin du centre lit toujours la demande et son historique (200) ;
+  - infirmier, accueil, facturation ou super admin sans rôle : 403 ;
+  - chaque lecture écrit `medical_record.read` avec `entityType: 'coverage_request'` ;
   - liste : centre (toutes ses demandes), assureur (sans brouillons), filtres `status` et `patientId`, pages de 50, sans diagnostic ni lignes, audit `{ coverageRequestIds }`.
 
 ### Implémentation
@@ -206,7 +208,7 @@ montants, la date limite, le motif et ce que voit le médecin conseil.
 - [ ] T025 [US3] Dans `apps/api/src/modules/coverage-requests/service.ts`, implémenter :
   - `findCoverageRequestForCenter` et `findCoverageRequestForInsurer` : sélections explicites selon le contrat, avec diagnostic (code et libellé), lignes triées par `position` et événements triés par `created_at` ;
   - `listCoverageRequests(tx, { orgId, side, status?, patientId?, offset })`.
-- [ ] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `coverage_request.read` est écrit dans la même transaction que la lecture.
+- [ ] T026 [US3] Dans `apps/api/src/modules/coverage-requests/routes.ts`, ajouter `GET …/coverage-requests/:id` et `GET …/coverage-requests`. Le côté vient de la permission (`coverage_request.create` donne le centre, `coverage_request.decide` l'assureur). L'audit `medical_record.read` (`entityType: 'coverage_request'`) est écrit dans la même transaction que la lecture.
 
 **Point de contrôle** : le cycle soumission → examen → décision passe par l'API, et les tests
 T022 et T023 sont verts.
@@ -298,8 +300,8 @@ Test vu en échec → règle partagée → service → route → test vert → c
 
 ### Parallélisme
 
-- Fondations : T002 à T005 touchent le même fichier (`schema.ts`), donc pas de parallélisme.
-  T007 (shared) peut avancer en même temps que T002 à T006.
+- Fondations : T002 (shared) d'abord, car l'énumération en dépend ; T003 à T006 touchent le même
+  fichier (`schema.ts`), donc pas de parallélisme.
 - US2 : T014 et T015 (tests partagés) en parallèle ; T021 (référentiel) en parallèle de T018 à
   T020.
 - US3 : T023 (lectures) en parallèle de T022 (décisions), puisque ce sont des fichiers de test

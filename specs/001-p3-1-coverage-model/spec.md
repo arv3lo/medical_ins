@@ -140,8 +140,7 @@ trois ont changé ensemble.
 1. **Étant donné** une transition réussie, **quand** on lit l'historique, **alors** elle y figure
    avec son auteur, sa date et son motif.
 2. **Étant donné** un diagnostic et des libellés d'actes repérables, **quand** on parcourt toutes
-   les entrées d'audit, **alors** aucun de ces textes n'y apparaît. Seuls les identifiants, les
-   statuts et les montants y figurent.
+   les entrées d'audit, **alors** aucun de ces textes n'y apparaît. Seuls les identifiants, les statuts, les montants et les noms des champs modifiés y figurent.
 3. **Étant donné** deux décisions envoyées en même temps sur la même demande, **quand** elles sont
    traitées, **alors** une seule réussit, et l'autre est refusée parce que le statut a changé.
 
@@ -174,7 +173,8 @@ trois ont changé ensemble.
   (quantité × tarif). Il n'est jamais repris du client.
 - **FR-003** : Les statuts sont : brouillon, soumise, en examen, accordée, refusée, complément
   demandé, utilisée, facturée, annulée, expirée. Refusée, annulée, expirée et facturée sont
-  définitifs.
+  définitifs. Leurs noms techniques (`draft`,
+  `submitted`…) sont dans `data-model.md`.
 - **FR-004** : Les transitions autorisées DOIVENT être exactement celles de ce tableau. Toute
   autre est refusée.
 
@@ -212,7 +212,8 @@ trois ont changé ensemble.
 - **FR-011** : Une demande est « partielle » quand le montant accordé est inférieur au montant
   estimé. Ce n'est pas un statut distinct.
 - **FR-012** : Le médecin conseil ne DOIT voir que les demandes adressées à son organisation, et de
-  chacune seulement : identité du patient, affiliation, diagnostic, lignes, montants, historique.
+  chacune seulement : identité du patient, affiliation, diagnostic, lignes, montants, historique,
+  et le nom du médecin demandeur (pour pouvoir le joindre).
   Il ne voit aucune autre donnée du dossier médical.
 - **FR-013** : Toute lecture d'une demande, par le centre ou par l'assureur, DOIT être auditée
   comme une lecture de contenu médical, puisqu'une demande porte un diagnostic.
@@ -252,11 +253,11 @@ trois ont changé ensemble.
   100 % de ceux du tableau sont acceptés quand leurs conditions sont remplies (test exhaustif).
 - **SC-002** : Aucune entrée d'audit ne contient le diagnostic, un libellé d'acte ou un motif
   (vérifié par recherche de textes repérables dans tout l'audit).
-- **SC-003** : Sur 100 paires de décisions concurrentes, exactement une décision par paire
-  réussit.
+- **SC-003** : Deux décisions concurrentes sur une même demande : exactement une réussit, l'autre
+  est refusée sans rien modifier (course reproduite de façon déterministe).
 - **SC-004** : Pour toute demande, la reconstitution de son parcours depuis l'historique redonne
   son statut actuel.
-- **SC-005** : Le montant estimé et la part patient affichés sont toujours égaux à ceux recalculés
+- **SC-005** : Le montant estimé et la part patient renvoyés sont toujours égaux à ceux recalculés
   depuis les lignes, sur tout jeu d'essai.
 
 ## Clarifications

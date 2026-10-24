@@ -150,8 +150,10 @@ lecture.
   ```
 
 - **Assureur** (`coverage_request.decide`) : même forme, sans `centerId` mais avec
-  `center: { id, name }`. Sélectionnée par une projection explicite. 404 sur un brouillon.
-- Audit : `coverage_request.read`, dans la même transaction que la lecture.
+  `center: { id, name }`, et `createdBy: { fullName }` seulement. Sélectionnée par une projection
+  explicite. 404 sur un brouillon.
+- Audit : `medical_record.read` (`entityType: 'coverage_request'`), dans la même transaction que
+  la lecture.
 
 ## Lister
 
@@ -162,4 +164,5 @@ lecture.
 - Réponse : `[{ id, status, patient: { lastName, firstNames }, insurer|center: { name },
 estimatedAmount, grantedAmount, validUntil, updatedAt }]`, sans diagnostic ni lignes. Pages de 50,
   triées par `updatedAt` décroissant.
-- Audit : `coverage_request.read`, avec `{ coverageRequestIds }` (FR-013).
+- Audit : `medical_record.read` (`entityType: 'coverage_request'`), avec `{ coverageRequestIds }`
+  (FR-013).
