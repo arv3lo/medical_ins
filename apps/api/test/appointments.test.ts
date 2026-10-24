@@ -352,4 +352,18 @@ describe.skipIf(!TEST_DATABASE_URL)('appointments', () => {
     const moved = await inject('PATCH', `${base()}/${appointment.id}`, reception, { doctorId });
     expect(moved.statusCode).toBe(400);
   });
+
+  it('never copies the reason into the append-only audit log', async () => {
+    const marker = 'MOTIF-SECRET-4711';
+    const appointment = (await book({ reason: marker })).json<{ id: string }>();
+    await inject('PATCH', `${base()}/${appointment.id}`, reception, {
+      startsAt: at('11:00'),
+      reason: `${marker} bis`,
+    });
+    const entries = await ctx.db.select().from(auditLogs);
+    expect(entries.map((e) => e.action)).toEqual(
+      expect.arrayContaining(['appointment.create', 'appointment.reschedule']),
+    );
+    expect(JSON.stringify(entries)).not.toContain(marker);
+  });
 });

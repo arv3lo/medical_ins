@@ -85,6 +85,15 @@ export function requireFuture(startsAt: Date) {
   }
 }
 
+/**
+ * What the audit log keeps of an appointment: ids and slot only. Never the reason: it is medical
+ * free text, the log is append-only, and the center admins who read it may not see it.
+ */
+export function auditedSlot(row: typeof appointments.$inferSelect) {
+  const { patientId, doctorId, startsAt, durationMinutes, status } = row;
+  return { patientId, doctorId, startsAt, durationMinutes, status };
+}
+
 export const endOf = (startsAt: Date, durationMinutes: number) =>
   new Date(startsAt.getTime() + durationMinutes * 60_000);
 

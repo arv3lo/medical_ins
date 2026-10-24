@@ -16,6 +16,7 @@ import { HttpError } from '../../lib/errors.js';
 import { requirePermission } from '../../plugins/auth.js';
 import { requireHealthCenter, requireLinkedPatient } from '../patients/service.js';
 import {
+  auditedSlot,
   endOf,
   findAppointment,
   listAppointments,
@@ -72,7 +73,7 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
           action: 'appointment.create',
           entityType: 'appointment',
           entityId: created!.id,
-          after: created,
+          after: auditedSlot(created!),
           ip: request.ip,
         });
         return created!.id;
@@ -109,8 +110,8 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
           action: 'appointment.reschedule',
           entityType: 'appointment',
           entityId: appointmentId,
-          before,
-          after,
+          before: auditedSlot(before),
+          after: auditedSlot(after!),
           ip: request.ip,
         });
       }),
