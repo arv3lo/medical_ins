@@ -7,7 +7,7 @@ import { createQueryClient } from './lib/query-client';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { OrganizationsPage } from './pages/OrganizationsPage';
-import './styles.css';
+import './index.css';
 
 const queryClient = createQueryClient();
 

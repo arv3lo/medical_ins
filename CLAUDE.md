@@ -89,5 +89,10 @@ These apply to new code, reviews and fixes.
 
 ## Code style
 
+- **UI: shadcn/ui first.** Use a shadcn/ui component whenever one exists (`apps/web/components.json`;
+  add with `pnpm dlx shadcn@latest add <name>` from `apps/web`) before writing a custom one.
+  Business components compose them in `apps/web/src/components`. Colors come only from the theme
+  tokens in `apps/web/src/index.css`, so the project's color chart can replace them in one place.
+
 - TypeScript strict, ESM. `import type` for types. Prettier for formatting, ESLint for lint.
 - Small named exports, short doc comments on anything non-obvious.
