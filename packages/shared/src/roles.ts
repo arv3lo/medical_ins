@@ -1,6 +1,11 @@
 export const ORGANIZATION_TYPES = ['health_center', 'insurer'] as const;
 export type OrganizationType = (typeof ORGANIZATION_TYPES)[number];
 
+export const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
+  health_center: 'Centre de santé',
+  insurer: 'Assureur',
+};
+
 export const CENTER_ROLES = [
   'center_admin',
   'reception',

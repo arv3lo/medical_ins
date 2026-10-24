@@ -1,4 +1,4 @@
-import { ROLE_LABELS, type CurrentUser } from '@medical-ins/shared';
+import { ORGANIZATION_TYPE_LABELS, ROLE_LABELS, type CurrentUser } from '@medical-ins/shared';
 import { useOutletContext } from 'react-router';
 
 export function HomePage() {
@@ -22,7 +22,7 @@ export function HomePage() {
             {user.memberships.map((m) => (
               <tr key={`${m.organizationId}-${m.role}`}>
                 <td>{m.organizationName}</td>
-                <td>{m.organizationType === 'health_center' ? 'Centre de santé' : 'Assureur'}</td>
+                <td>{ORGANIZATION_TYPE_LABELS[m.organizationType]}</td>
                 <td>{ROLE_LABELS[m.role]}</td>
               </tr>
             ))}

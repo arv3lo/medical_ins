@@ -1,12 +1,13 @@
-import type { CreateOrganizationInput, Organization, OrganizationType } from '@medical-ins/shared';
+import {
+  ORGANIZATION_TYPE_LABELS,
+  ORGANIZATION_TYPES,
+  type CreateOrganizationInput,
+  type Organization,
+  type OrganizationType,
+} from '@medical-ins/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { api } from '../lib/api';
-
-const TYPE_LABELS: Record<OrganizationType, string> = {
-  health_center: 'Centre de santé',
-  insurer: 'Assureur',
-};
 
 export function OrganizationsPage() {
   const queryClient = useQueryClient();
@@ -41,8 +42,11 @@ export function OrganizationsPage() {
       <h1>Organisations</h1>
       <form className="inline" onSubmit={onSubmit}>
         <select value={type} onChange={(e) => setType(e.target.value as OrganizationType)}>
-          <option value="health_center">Centre de santé</option>
-          <option value="insurer">Assureur</option>
+          {ORGANIZATION_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {ORGANIZATION_TYPE_LABELS[t]}
+            </option>
+          ))}
         </select>
         <input placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} required />
         <input placeholder="Région" value={region} onChange={(e) => setRegion(e.target.value)} />
@@ -67,7 +71,7 @@ export function OrganizationsPage() {
             {organizations.data.map((o) => (
               <tr key={o.id}>
                 <td>{o.name}</td>
-                <td>{TYPE_LABELS[o.type]}</td>
+                <td>{ORGANIZATION_TYPE_LABELS[o.type]}</td>
                 <td>{o.region ?? '—'}</td>
               </tr>
             ))}
