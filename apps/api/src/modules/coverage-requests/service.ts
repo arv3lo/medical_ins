@@ -322,5 +322,6 @@ export function listCoverageRequests(
     )
     .orderBy(desc(coverageRequests.updatedAt), coverageRequests.id)
     .limit(COVERAGE_REQUEST_PAGE_SIZE)
-    .offset(filter.offset);
+    .offset(filter.offset)
+    .then((rows) => rows.map((row) => ({ ...row, updatedAt: iso(row.updatedAt) })));
 }
