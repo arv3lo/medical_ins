@@ -15,6 +15,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { HttpError, notFound } from '../../lib/errors.js';
+import { iso } from '../../lib/iso.js';
 
 const SEARCH_LIMIT = 20;
 
@@ -44,8 +45,6 @@ function selectConsultations(db: Db | Tx) {
     .innerJoin(users, eq(users.id, consultations.doctorId))
     .innerJoin(organizations, eq(organizations.id, consultations.organizationId));
 }
-
-const iso = (date: Date | null) => date?.toISOString() ?? null;
 
 export async function listPatientConsultations(
   db: Db | Tx,

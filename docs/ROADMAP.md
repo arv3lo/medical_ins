@@ -26,7 +26,7 @@ serveur).
 | P0    | Socle technique                                   | Fait      |
 | P1    | Comptes, organisations et référentiels            | À faire   |
 | P2    | Patients et dossiers médicaux                     | En cours  |
-| P3    | Prises en charge                                  | À faire   |
+| P3    | Prises en charge                                  | En cours  |
 | P4    | Facturation et remboursements                     | À faire   |
 | P5    | Tableaux de bord et statistiques                  | À faire   |
 | P6    | Sécurité, exploitation et mise en production      | À faire   |
@@ -213,15 +213,11 @@ Ce qu'il manque pour administrer la plateforme au quotidien.
 Statuts : brouillon → soumise → en examen → accordée (totale ou partielle) / refusée /
 complément demandé → (soumise) ; accordée → utilisée → facturée ; annulée et expirée.
 
-- [ ] **P3.1 Modèle et machine à états**
-  - Dépend de : P2.4, P1.7
-  - Livre : tables `coverage_requests` (patient, affiliation, centre, assureur, diagnostic,
-    montant estimé, montant accordé, part patient, date limite de validité, statut) et
-    `coverage_request_items` (acte, quantité, tarif) ; `coverage_request_events` (historique de
-    statut avec motif) ; fonction pure de transition dans `packages/shared` (table des
-    transitions autorisées par statut et par rôle).
-  - Acceptation : toute transition non prévue est refusée (test exhaustif de la table) ; chaque
-    transition écrit un événement et un audit dans la même transaction.
+- [x] **P3.1 Modèle et machine à états** (fait)
+  - Spec : [`specs/001-p3-1-coverage-model/spec.md`](../specs/001-p3-1-coverage-model/spec.md)
+    (tables, transitions par statut et par rôle, critères d'acceptation).
+  - Dépend de : P2.4 ; P1.7 remplacé pour l'instant par un référentiel d'actes de départ avec
+    tarif de référence (voir la spec, FR-015).
 
 - [ ] **P3.2 Création et soumission par le centre**
   - Dépend de : P3.1
@@ -378,6 +374,8 @@ Reprises du cahier des charges ; chaque réponse va dans le journal des décisio
 - Quel délai maximal de réponse de l'assureur pour une demande urgente ?
 - Source et licence des libellés CIM-10 FR (OMS / ATIH) avant d'importer la table complète
   (P1.5) ; le jeu de départ de P2.4 en reprend une partie.
+- Valider les tarifs indicatifs du jeu d'actes de départ (P3.1, migration `0015`) avant la mise
+  en production.
 - Obtenir un vrai bon de prise en charge et une vraie feuille de soins pour valider les
   formulaires.
 
