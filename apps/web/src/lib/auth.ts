@@ -1,8 +1,8 @@
 import type { CurrentUser, LoginInput } from '@medical-ins/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from './api';
 
-const ME_KEY = ['auth', 'me'];
+export const ME_KEY = ['auth', 'me'];
 
 export function useCurrentUser() {
   return useQuery({
@@ -31,9 +31,12 @@ export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>('/auth/logout', { method: 'POST' }),
-    onSuccess: () => {
-      queryClient.setQueryData(ME_KEY, null);
-      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' });
-    },
+    onSuccess: () => clearSession(queryClient),
   });
+}
+
+/** Forgets the user and everything cached under their session; the layout then shows login. */
+export function clearSession(queryClient: QueryClient): void {
+  queryClient.setQueryData(ME_KEY, null);
+  queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' });
 }

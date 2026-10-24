@@ -52,9 +52,9 @@ export function OrganizationsPage() {
       </form>
       {create.error && <p className="error">{create.error.message}</p>}
 
-      {organizations.isPending ? (
-        <p>Chargement…</p>
-      ) : (
+      {organizations.isPending && <p>Chargement…</p>}
+      {organizations.error && <p className="error">{organizations.error.message}</p>}
+      {organizations.data && (
         <table>
           <thead>
             <tr>
@@ -64,7 +64,7 @@ export function OrganizationsPage() {
             </tr>
           </thead>
           <tbody>
-            {organizations.data?.map((o) => (
+            {organizations.data.map((o) => (
               <tr key={o.id}>
                 <td>{o.name}</td>
                 <td>{TYPE_LABELS[o.type]}</td>
