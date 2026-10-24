@@ -20,7 +20,7 @@ import {
   searchMedicalActs,
   updateCoverageRequest,
 } from './service.js';
-import { applyTransition, requireReachable } from './transitions.js';
+import { applyTransition } from './transitions.js';
 
 const orgParams = z.object({ orgId: z.string().uuid() });
 const requestParams = orgParams.extend({ id: z.string().uuid() });
@@ -123,8 +123,7 @@ export function coverageRequestRoutes(app: FastifyInstance, { db }: { db: Db }):
     const actor = requirePermission(request, orgId, 'coverage_request.create');
     const input = updateCoverageRequestInputSchema.parse(request.body);
     await db.transaction(async (tx) => {
-      const row = await lockCoverageRequest(tx, id);
-      requireReachable(row, orgId, 'center');
+      const row = await lockCoverageRequest(tx, id, { actor: 'center', organizationId: orgId });
       await updateCoverageRequest(tx, row, input);
       await audit(tx, {
         actorUserId: actor.id,

@@ -3,7 +3,7 @@ import type {
   CreateCoverageRequestInput,
   UpdateCoverageRequestInput,
 } from '@medical-ins/shared';
-import { and, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from '../../db/client.js';
 import {
@@ -39,15 +39,38 @@ export function searchMedicalActs(db: Db, q = '') {
     .limit(SEARCH_LIMIT);
 }
 
+/** Who acts or reads: the requesting center, or the insurer the request is addressed to. */
+export type Side = { actor: 'center' | 'insurer'; organizationId: string };
+
 /**
- * The request, its row locked until `tx` ends: a concurrent move or edit waits for this one, then
- * sees the new status instead of acting on the old one (constitution, principle V).
+ * The only home of who may reach a request (FR-012, FR-014): the requesting center always; the
+ * insurer only once the request has been submitted to it, which its append-only history proves.
+ * A draft cancelled before being sent was never the insurer's: it stays out of its reach.
  */
-export async function lockCoverageRequest(tx: Tx, id: string): Promise<CoverageRequestRow> {
+const reachableBy = ({ actor, organizationId }: Side) =>
+  actor === 'center'
+    ? eq(coverageRequests.centerId, organizationId)
+    : and(
+        eq(coverageRequests.insurerId, organizationId),
+        sql`EXISTS (SELECT 1 FROM ${coverageRequestEvents}
+          WHERE ${coverageRequestEvents.coverageRequestId} = ${coverageRequests.id}
+          AND ${coverageRequestEvents.toStatus} = 'submitted')`,
+      );
+
+/**
+ * The request as `side` may act on it (404 otherwise), its row locked until `tx` ends: a
+ * concurrent move or edit waits for this one, then sees the new status instead of acting on the
+ * old one (constitution, principle V).
+ */
+export async function lockCoverageRequest(
+  tx: Tx,
+  id: string,
+  side: Side,
+): Promise<CoverageRequestRow> {
   const [request] = await tx
     .select()
     .from(coverageRequests)
-    .where(eq(coverageRequests.id, id))
+    .where(and(eq(coverageRequests.id, id), reachableBy(side)))
     .for('update');
   if (!request) throw notFound('Demande de prise en charge');
   return request;
@@ -170,14 +193,6 @@ export async function countItems(db: Db | Tx, id: string): Promise<number> {
 
 const center = alias(organizations, 'center');
 const insurer = alias(organizations, 'insurer');
-
-/** Who reads: the requesting center sees its requests; the insurer sees them once submitted. */
-export type Side = { actor: 'center' | 'insurer'; organizationId: string };
-
-const reachableBy = ({ actor, organizationId }: Side) =>
-  actor === 'center'
-    ? eq(coverageRequests.centerId, organizationId)
-    : and(eq(coverageRequests.insurerId, organizationId), ne(coverageRequests.status, 'draft'));
 
 const iso = (date: Date) => date.toISOString();
 

@@ -292,6 +292,21 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: drafts and submission', 
       expect((await read(await f.draft(), f.advisor, f.insurer)).statusCode).toBe(404);
     });
 
+    it('never shows the insurer a request the center cancelled before submitting it', async () => {
+      const neverSent = await f.draft();
+      expect((await f.move(neverSent, f.doctor, { to: 'cancelled' })).statusCode).toBe(200);
+      const withdrawn = await f.submitted();
+      await f.move(withdrawn, f.doctor, { to: 'cancelled', reason: 'Patient transféré' });
+
+      expect((await read(neverSent, f.advisor, f.insurer)).statusCode).toBe(404);
+      const list = await f.inject('GET', f.base(f.insurer), f.advisor);
+      expect(list.json().map((r: { id: string }) => r.id)).toEqual([withdrawn]);
+      const move = await f.move(neverSent, f.advisor, { to: 'under_review' }, f.insurer);
+      expect(move.statusCode).toBe(404);
+      // Once sent, a request stays visible to its insurer, whatever happens to it next.
+      expect((await read(withdrawn, f.advisor, f.insurer)).statusCode).toBe(200);
+    });
+
     it('finds nothing from another center or insurer', async () => {
       const id = await f.submitted();
       const otherDoctor = await f.as('doctor', f.otherCenter);

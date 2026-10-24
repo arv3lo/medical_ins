@@ -9,26 +9,13 @@ import { eq } from 'drizzle-orm';
 import type { Tx } from '../../db/client.js';
 import { coverageRequestEvents, coverageRequests } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
-import { HttpError, notFound } from '../../lib/errors.js';
+import { HttpError } from '../../lib/errors.js';
 import {
   type CoverageRequestRow,
   countItems,
   lockCoverageRequest,
   requirePatientAffiliation,
 } from './service.js';
-
-/** The request as `actor` of `organizationId` may act on it, or 404 (FR-014). */
-export function requireReachable(
-  request: CoverageRequestRow,
-  organizationId: string,
-  actor: Exclude<CoverageRequestActor, 'system'>,
-): void {
-  const reachable =
-    actor === 'center'
-      ? request.centerId === organizationId
-      : request.insurerId === organizationId && request.status !== 'draft';
-  if (!reachable) throw notFound('Demande de prise en charge');
-}
 
 async function problem(tx: Tx, request: CoverageRequestRow, input: TransitionInput) {
   if (input.to !== 'submitted') return transitionProblem(request.status, input, request);
@@ -56,8 +43,10 @@ export async function applyTransition(
   },
 ): Promise<{ id: string; status: CoverageRequestRow['status'] }> {
   const { input } = move;
-  const request = await lockCoverageRequest(tx, move.id);
-  requireReachable(request, move.organizationId, move.actor);
+  const request = await lockCoverageRequest(tx, move.id, {
+    actor: move.actor,
+    organizationId: move.organizationId,
+  });
   if (!canTransition(request.status, input.to, move.actor)) {
     throw new HttpError(409, "Ce changement de statut n'est pas possible");
   }
