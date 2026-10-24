@@ -1,4 +1,8 @@
-import { createOrganizationInputSchema, isRoleAllowedFor, ROLES } from '@medical-ins/shared';
+import {
+  addMemberInputSchema,
+  createOrganizationInputSchema,
+  isRoleAllowedFor,
+} from '@medical-ins/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -6,18 +10,9 @@ import type { Db } from '../../db/client.js';
 import { memberships, organizations, users } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { HttpError, notFound } from '../../lib/errors.js';
-import { hashPassword } from '../../lib/password.js';
 import { requirePermission, requireSuperAdmin, requireUser } from '../../plugins/auth.js';
 
 const idParams = z.object({ id: z.string().uuid() });
-
-const addMemberInputSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
-  role: z.enum(ROLES),
-  /** Required only when the user does not exist yet. */
-  fullName: z.string().trim().min(2).optional(),
-  initialPassword: z.string().min(10).optional(),
-});
 
 export function organizationRoutes(app: FastifyInstance, { db }: { db: Db }): void {
   app.get('/api/organizations', async (request) => {
@@ -83,27 +78,13 @@ export function organizationRoutes(app: FastifyInstance, { db }: { db: Db }): vo
       throw new HttpError(400, "Ce rôle n'existe pas pour ce type d'organisation");
     }
 
+    const user = await db.query.users.findFirst({ where: eq(users.email, input.email) });
+    if (!user) throw notFound('Compte');
+
     const membership = await db.transaction(async (tx) => {
-      let user = await tx.query.users.findFirst({ where: eq(users.email, input.email) });
-      if (!user) {
-        if (!input.fullName || !input.initialPassword) {
-          throw new HttpError(
-            400,
-            'fullName et initialPassword sont requis pour un nouvel utilisateur',
-          );
-        }
-        [user] = await tx
-          .insert(users)
-          .values({
-            email: input.email,
-            fullName: input.fullName,
-            passwordHash: await hashPassword(input.initialPassword),
-          })
-          .returning();
-      }
       const [created] = await tx
         .insert(memberships)
-        .values({ userId: user!.id, organizationId: id, role: input.role })
+        .values({ userId: user.id, organizationId: id, role: input.role })
         .onConflictDoNothing()
         .returning();
       if (!created) throw new HttpError(409, 'Cet utilisateur a déjà ce rôle');

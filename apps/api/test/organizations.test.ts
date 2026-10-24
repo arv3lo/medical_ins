@@ -1,5 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { memberships, organizations } from '../src/db/schema.js';
+import { memberships, organizations, users } from '../src/db/schema.js';
 import {
   TEST_DATABASE_URL,
   createUser,
@@ -61,22 +62,16 @@ describe.skipIf(!TEST_DATABASE_URL)('organizations', () => {
 
   it('lets a center admin manage members, but not a doctor', async () => {
     const center = await createCenter();
+    await createUser(ctx.db, { email: 'chef@example.mg', password: 'chef-pass-123' });
+    await createUser(ctx.db, { email: 'doc@example.mg', password: 'doc-pass-123' });
     expect(
-      (
-        await addMember(center.id, adminCookie, {
-          email: 'chef@example.mg',
-          fullName: 'Chef de centre',
-          initialPassword: 'chef-pass-123',
-          role: 'center_admin',
-        })
-      ).statusCode,
+      (await addMember(center.id, adminCookie, { email: 'chef@example.mg', role: 'center_admin' }))
+        .statusCode,
     ).toBe(201);
 
     const chef = await login(ctx.app, 'chef@example.mg', 'chef-pass-123');
     const added = await addMember(center.id, chef.cookie, {
       email: 'doc@example.mg',
-      fullName: 'Dr Rakoto',
-      initialPassword: 'doc-pass-123',
       role: 'doctor',
     });
     expect(added.statusCode).toBe(201);
@@ -95,6 +90,18 @@ describe.skipIf(!TEST_DATABASE_URL)('organizations', () => {
       headers: { cookie: doctor.cookie },
     });
     expect(mine.json()).toHaveLength(1);
+  });
+
+  it('never creates an account when adding a member', async () => {
+    const center = await createCenter();
+    const response = await addMember(center.id, adminCookie, {
+      email: 'new@example.mg',
+      fullName: 'Nouveau',
+      initialPassword: 'chosen-by-admin',
+      role: 'doctor',
+    });
+    expect(response.statusCode).toBe(404);
+    expect(await ctx.db.select().from(users).where(eq(users.email, 'new@example.mg'))).toEqual([]);
   });
 
   it('does not create an organization whose audit entry cannot be written', async () => {
@@ -122,10 +129,9 @@ describe.skipIf(!TEST_DATABASE_URL)('organizations', () => {
 
   it('refuses an insurer role inside a health center', async () => {
     const center = await createCenter();
+    await createUser(ctx.db, { email: 'conseil@example.mg', password: 'conseil-pass-1' });
     const response = await addMember(center.id, adminCookie, {
       email: 'conseil@example.mg',
-      fullName: 'Médecin conseil',
-      initialPassword: 'conseil-pass-1',
       role: 'medical_advisor',
     });
     expect(response.statusCode).toBe(400);

@@ -47,5 +47,7 @@ local pour `localhost`). L'API applique les migrations à chaque démarrage.
 ## Rôles
 
 Les rôles sont attribués par organisation (une personne peut être médecin dans deux centres).
+Seul le super admin crée les comptes (`POST /api/users`) ; les administrateurs d'organisation
+rattachent des comptes existants, sans jamais choisir le mot de passe de quelqu'un.
 La matrice de permissions est dans `packages/shared/src/roles.ts` :
 le contenu médical est réservé aux soignants, l'assureur ne voit que ce que sa décision demande.
