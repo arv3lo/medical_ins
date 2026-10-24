@@ -9,6 +9,8 @@
  * components only ever use the tokens, never raw colors.
  */
 :root {
+  /* Native widgets (scrollbars, autofill, date pickers) follow the theme too. */
+  color-scheme: light dark;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
