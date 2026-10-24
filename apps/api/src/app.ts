@@ -10,6 +10,7 @@ import { HttpError } from './lib/errors.js';
 import { affiliationRoutes } from './modules/affiliations/routes.js';
 import { appointmentRoutes } from './modules/appointments/routes.js';
 import { consultationRoutes } from './modules/consultations/routes.js';
+import { coverageRequestRoutes } from './modules/coverage-requests/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { organizationRoutes } from './modules/organizations/routes.js';
 import { patientRoutes } from './modules/patients/routes.js';
@@ -54,6 +55,7 @@ export async function buildApp({ db, env }: { db: Db; env: Env }) {
   affiliationRoutes(app, { db });
   appointmentRoutes(app, { db });
   consultationRoutes(app, { db });
+  coverageRequestRoutes(app, { db });
 
   return app;
 }
