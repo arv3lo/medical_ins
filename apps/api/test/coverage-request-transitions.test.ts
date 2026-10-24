@@ -1,8 +1,13 @@
-import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { affiliations } from '../src/db/schema.js';
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  affiliations,
+  auditLogs,
+  coverageRequestEvents,
+  coverageRequests,
+} from '../src/db/schema.js';
 import { type CoverageFixture, coverageFixture } from './coverage-fixtures.js';
-import { TEST_DATABASE_URL, setupTestApp } from './helpers.js';
+import { TEST_DATABASE_URL, setupTestApp, withAuditFailing } from './helpers.js';
 
 describe.skipIf(!TEST_DATABASE_URL)('coverage requests: transitions', () => {
   let ctx: Awaited<ReturnType<typeof setupTestApp>>;
@@ -14,6 +19,15 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: transitions', () => {
   afterAll(() => ctx.close());
   beforeEach(async () => {
     f = await coverageFixture(ctx);
+  });
+
+  // SC-004: whatever a scenario did, each request's last history event is its current status.
+  afterEach(async () => {
+    const requests = await ctx.db.select().from(coverageRequests);
+    for (const request of requests) {
+      const history = await f.events(request.id);
+      expect(history.at(-1)?.toStatus, `history of ${request.id}`).toBe(request.status);
+    }
   });
 
   /** A move by the medical advisor of the insurer (or another cookie), through the insurer's URL. */
@@ -138,4 +152,95 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: transitions', () => {
       );
     });
   });
+
+  describe('history and audit', () => {
+    it('writes nothing when the audit entry fails: status, event and audit go together', async () => {
+      const id = await f.draft();
+      const response = await withAuditFailing(ctx.db, () =>
+        f.move(id, f.doctor, { to: 'submitted' }),
+      );
+      expect(response.statusCode).toBe(500);
+      expect((await f.row(id)).status).toBe('draft');
+      expect((await f.events(id)).map((e) => e.toStatus)).toEqual(['draft']);
+    });
+
+    it('keeps diagnosis, act labels and reasons out of every audit entry (SC-002)', async () => {
+      const MARKER = 'MOTIF-REPERABLE-7731';
+      const id = await f.draft();
+      const patch = (payload: object) => f.inject('PATCH', `${f.base()}/${id}`, f.doctor, payload);
+      expect((await patch({ items: [{ actCode: 'ECHO-ABD', quantity: 1 }] })).statusCode).toBe(200);
+      await f.move(id, f.doctor, { to: 'submitted' });
+      await decide(id, { to: 'under_review' });
+      await decide(id, { to: 'info_requested', reason: `${MARKER} ordonnance ?` });
+      expect((await patch({ diagnosisCode: 'J00' })).statusCode).toBe(200);
+      await f.move(id, f.doctor, { to: 'submitted' });
+      await decide(id, { to: 'under_review' });
+      const granted = await decide(id, {
+        to: 'granted',
+        grantedAmount: 50000,
+        validUntil: '2999-12-31',
+        reason: `${MARKER} plafond`,
+      });
+      expect(granted.statusCode).toBe(200);
+      expect((await f.move(id, f.doctor, { to: 'used' })).statusCode).toBe(200);
+      await f.inject('GET', `${f.base()}/${id}`, f.doctor);
+
+      const entries = JSON.stringify(await ctx.db.select().from(auditLogs));
+      for (const secret of [
+        MARKER,
+        'Échographie abdominale',
+        'Paludisme',
+        'Rhinopharyngite',
+        '"B54"',
+        '"J00"',
+      ]) {
+        expect(entries).not.toContain(secret);
+      }
+      // The reasons are kept where they belong: in the request's own history.
+      expect((await f.events(id)).filter((e) => e.reason?.includes(MARKER))).toHaveLength(2);
+    });
+
+    it('lets exactly one of two concurrent decisions through (SC-003)', async () => {
+      const id = await f.underReview();
+      let pending!: Promise<{ statusCode: number }[]>;
+      await ctx.db.transaction(async (tx) => {
+        // Holds the request so both decisions queue on its lock, then lets them run.
+        await tx.select().from(coverageRequests).where(eq(coverageRequests.id, id)).for('update');
+        pending = Promise.all([
+          decide(id, { to: 'granted', grantedAmount: 70000, validUntil: '2999-12-31' }),
+          decide(id, { to: 'rejected', reason: 'Hors contrat' }),
+        ]);
+        while ((await waitingOnLock()) < 2) await new Promise((r) => setTimeout(r, 10));
+      });
+      const codes = (await pending).map((r) => r.statusCode).sort();
+      expect(codes).toEqual([200, 409]);
+      const decisions = (await f.events(id)).filter((e) => e.fromStatus === 'under_review');
+      expect(decisions).toHaveLength(1);
+    });
+
+    it('never changes or deletes a history event', async () => {
+      const id = await f.draft();
+      await expect(
+        ctx.db
+          .update(coverageRequestEvents)
+          .set({ reason: 'réécrit' })
+          .where(eq(coverageRequestEvents.coverageRequestId, id)),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringMatching(/append-only \((UPDATE|DELETE) rejected\)/) },
+      });
+      await expect(
+        ctx.db.delete(coverageRequestEvents).where(eq(coverageRequestEvents.coverageRequestId, id)),
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringMatching(/append-only \((UPDATE|DELETE) rejected\)/) },
+      });
+    });
+  });
+
+  async function waitingOnLock() {
+    const rows = await ctx.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    return rows[0]!.n;
+  }
 });
