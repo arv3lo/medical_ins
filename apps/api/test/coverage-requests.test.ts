@@ -4,6 +4,7 @@ import {
   affiliations,
   coverageRequestItems,
   coverageRequests,
+  medicalActs,
   memberships,
   patients,
   users,
@@ -120,6 +121,24 @@ describe.skipIf(!TEST_DATABASE_URL)('coverage requests: drafts and submission', 
       const id = await f.draft();
       const patch = await f.inject('PATCH', `${f.base()}/${id}`, f.doctor, { items });
       expect(patch.statusCode).toBe(400);
+    });
+
+    it('refuses on edit a single line too large to store, priced at the reference', async () => {
+      // Reference prices have no bound: 100 × 30 million Ar overflows one line on its own.
+      await ctx.db
+        .insert(medicalActs)
+        .values({ code: 'TEST-COSTLY', label: 'Acte coûteux', referencePrice: 30_000_000 })
+        .onConflictDoNothing();
+      try {
+        const id = await f.draft();
+        const patch = await f.inject('PATCH', `${f.base()}/${id}`, f.doctor, {
+          items: [{ actCode: 'TEST-COSTLY', quantity: 100 }],
+        });
+        expect(patch.statusCode).toBe(400);
+        expect(patch.json().message).toMatch(/montant/i);
+      } finally {
+        await ctx.db.delete(medicalActs).where(eq(medicalActs.code, 'TEST-COSTLY'));
+      }
     });
 
     it('is for the doctors of the center only', async () => {

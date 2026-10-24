@@ -179,13 +179,14 @@ export async function updateCoverageRequest(
   }
   if (input.items) {
     const items = await priceItems(tx, input.items);
+    // Checked before the lines are written: a line too large for its column would crash the insert.
+    fields.estimatedAmount = total(items);
     await tx
       .delete(coverageRequestItems)
       .where(eq(coverageRequestItems.coverageRequestId, request.id));
     await tx
       .insert(coverageRequestItems)
       .values(items.map((item) => ({ ...item, coverageRequestId: request.id })));
-    fields.estimatedAmount = total(items);
   }
   await tx.update(coverageRequests).set(fields).where(eq(coverageRequests.id, request.id));
 }

@@ -136,8 +136,9 @@ export function transitionProblem(
 }
 
 /**
- * Amounts are stored as 32-bit integers (max 2 147 483 647). These bounds keep every line under
- * that limit; the server also checks the total, since a line may take the act's reference price.
+ * Amounts are stored as 32-bit integers (max 2 147 483 647). These bounds keep a line with its own
+ * price under that limit; a line at the act's reference price is not bounded here, so the server
+ * checks the total, which covers every line, before writing any of them.
  */
 export const MAX_ITEM_QUANTITY = 100;
 export const MAX_UNIT_PRICE = 20_000_000;
