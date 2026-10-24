@@ -169,7 +169,7 @@ export const affiliations = pgTable(
 );
 
 /**
- * A slot with a doctor. An exclusion constraint (migration 0006, the only home of that rule) keeps
+ * A slot with a doctor. An exclusion constraint (migration 0009, the only home of that rule) keeps
  * a doctor's held slots (scheduled, arrived, completed) from overlapping; cancelled and no-show
  * appointments free theirs. `ends_at` is stored so the range is an immutable expression.
  */
@@ -208,7 +208,7 @@ export const icd10Codes = pgTable('icd10_codes', {
 
 /**
  * A visit with a doctor. Editable by its author while a draft; once `signed_at` is set, a trigger
- * (migration 0008) rejects any change to it and to its diagnoses: corrections become addenda.
+ * (migration 0011) rejects any change to it and to its diagnoses: corrections become addenda.
  */
 export const consultations = pgTable(
   'consultations',
@@ -256,7 +256,7 @@ export const diagnoses = pgTable(
   ],
 );
 
-/** Append-only notes added to a signed consultation (trigger in migration 0008). */
+/** Append-only notes added to a signed consultation (trigger in migration 0011). */
 export const consultationAddenda = pgTable(
   'consultation_addenda',
   {

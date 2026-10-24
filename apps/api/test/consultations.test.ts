@@ -238,7 +238,7 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect(sign.json()).toMatchObject({ message: 'Consultation signée : ajoutez un avenant' });
   });
 
-  /** Expects `query` to be stopped by one of the read-only triggers of migration 0008. */
+  /** Expects `query` to be stopped by one of the read-only triggers of migration 0011. */
   const rejectedBy = (query: Promise<unknown>, message: RegExp) =>
     expect(query).rejects.toMatchObject({ cause: { message: expect.stringMatching(message) } });
 
