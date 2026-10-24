@@ -1,33 +1,43 @@
 import { ORGANIZATION_TYPE_LABELS, ROLE_LABELS, type CurrentUser } from '@medical-ins/shared';
 import { useOutletContext } from 'react-router';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 export function HomePage() {
   const user = useOutletContext<CurrentUser>();
 
   return (
-    <section>
-      <h1>Bonjour {user.fullName}</h1>
+    <section className="grid gap-6">
+      <h1 className="text-2xl font-semibold">Bonjour {user.fullName}</h1>
       {user.memberships.length === 0 ? (
-        <p>Vous n'êtes rattaché à aucune organisation pour le moment.</p>
+        <p className="text-muted-foreground">
+          Vous n'êtes rattaché à aucune organisation pour le moment.
+        </p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Organisation</th>
-              <th>Type</th>
-              <th>Rôle</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Organisation</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Rôle</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {user.memberships.map((m) => (
-              <tr key={`${m.organizationId}-${m.role}`}>
-                <td>{m.organizationName}</td>
-                <td>{ORGANIZATION_TYPE_LABELS[m.organizationType]}</td>
-                <td>{ROLE_LABELS[m.role]}</td>
-              </tr>
+              <TableRow key={`${m.organizationId}-${m.role}`}>
+                <TableCell>{m.organizationName}</TableCell>
+                <TableCell>{ORGANIZATION_TYPE_LABELS[m.organizationType]}</TableCell>
+                <TableCell>{ROLE_LABELS[m.role]}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </section>
   );

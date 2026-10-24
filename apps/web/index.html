@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Medical Ins</title>
+    <script>
+      // Follow the system theme: shadcn/ui switches its tokens on the .dark class.
+      const dark = window.matchMedia('(prefers-color-scheme: dark)');
+      const apply = () => document.documentElement.classList.toggle('dark', dark.matches);
+      apply();
+      dark.addEventListener('change', apply);
+    </script>
   </head>
   <body>
     <div id="root"></div>

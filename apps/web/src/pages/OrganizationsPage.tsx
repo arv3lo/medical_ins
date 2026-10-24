@@ -7,6 +7,24 @@ import {
 } from '@medical-ins/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
+import { ErrorAlert } from '@/components/error-alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '../lib/api';
 
 export function OrganizationsPage() {
@@ -38,45 +56,61 @@ export function OrganizationsPage() {
   };
 
   return (
-    <section>
-      <h1>Organisations</h1>
-      <form className="inline" onSubmit={onSubmit}>
-        <select value={type} onChange={(e) => setType(e.target.value as OrganizationType)}>
-          {ORGANIZATION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {ORGANIZATION_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-        <input placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input placeholder="Région" value={region} onChange={(e) => setRegion(e.target.value)} />
-        <button type="submit" disabled={create.isPending}>
-          Ajouter
-        </button>
-      </form>
-      {create.error && <p className="error">{create.error.message}</p>}
-
-      {organizations.isPending && <p>Chargement…</p>}
-      {organizations.error && <p className="error">{organizations.error.message}</p>}
-      {organizations.data && (
-        <table>
-          <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Type</th>
-              <th>Région</th>
-            </tr>
-          </thead>
-          <tbody>
-            {organizations.data.map((o) => (
-              <tr key={o.id}>
-                <td>{o.name}</td>
-                <td>{ORGANIZATION_TYPE_LABELS[o.type]}</td>
-                <td>{o.region ?? '—'}</td>
-              </tr>
+    <section className="grid gap-6">
+      <h1 className="text-2xl font-semibold">Organisations</h1>
+      <form className="flex flex-wrap gap-2" onSubmit={onSubmit}>
+        <Select value={type} onValueChange={(value) => setType(value as OrganizationType)}>
+          <SelectTrigger aria-label="Type" className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ORGANIZATION_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>
+                {ORGANIZATION_TYPE_LABELS[t]}
+              </SelectItem>
             ))}
-          </tbody>
-        </table>
+          </SelectContent>
+        </Select>
+        <Input
+          className="w-64"
+          placeholder="Nom"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <Input
+          className="w-64"
+          placeholder="Région"
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+        />
+        <Button type="submit" disabled={create.isPending}>
+          Ajouter
+        </Button>
+      </form>
+      {create.error && <ErrorAlert error={create.error} />}
+
+      {organizations.isPending && <p className="text-muted-foreground">Chargement…</p>}
+      {organizations.error && <ErrorAlert error={organizations.error} />}
+      {organizations.data && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nom</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Région</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {organizations.data.map((o) => (
+              <TableRow key={o.id}>
+                <TableCell>{o.name}</TableCell>
+                <TableCell>{ORGANIZATION_TYPE_LABELS[o.type]}</TableCell>
+                <TableCell>{o.region ?? '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </section>
   );

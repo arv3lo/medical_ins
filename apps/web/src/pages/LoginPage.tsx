@@ -1,5 +1,10 @@
 import { type FormEvent, useState } from 'react';
 import { Navigate } from 'react-router';
+import { ErrorAlert } from '@/components/error-alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useCurrentUser, useLogin } from '../lib/auth';
 
 export function LoginPage() {
@@ -16,34 +21,42 @@ export function LoginPage() {
   };
 
   return (
-    <main className="auth">
-      <form className="card" onSubmit={onSubmit}>
-        <h1>Connexion</h1>
-        <label>
-          Email
-          <input
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Mot de passe
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        {login.error && <p className="error">{login.error.message}</p>}
-        <button type="submit" disabled={login.isPending}>
-          {login.isPending ? 'Connexion…' : 'Se connecter'}
-        </button>
-      </form>
+    <main className="grid min-h-svh place-items-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-xl">Connexion</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={onSubmit}>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            {login.error && <ErrorAlert error={login.error} />}
+            <Button type="submit" disabled={login.isPending}>
+              {login.isPending ? 'Connexion…' : 'Se connecter'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   );
 }
