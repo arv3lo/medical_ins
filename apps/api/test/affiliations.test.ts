@@ -137,6 +137,16 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     );
   });
 
+  it("hides a patient's affiliations from a center the patient is not linked to", async () => {
+    await declare(reception);
+    const list = await inject(
+      'GET',
+      `/api/organizations/${otherCenter}/patients/${patientId}/affiliations`,
+      await as('reception', otherCenter),
+    );
+    expect(list.statusCode).toBe(404);
+  });
+
   it('refuses an insurer id that is not an insurer', async () => {
     expect((await declare(reception, { insurerId: otherCenter })).statusCode).toBe(404);
   });
@@ -377,6 +387,23 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
       reception,
     );
     expect(search.json()).toMatchObject([{ lastName: 'Rakoto' }]);
+  });
+
+  it("does not find another center's patient by member number", async () => {
+    await declare(reception);
+    const search = await inject(
+      'GET',
+      `/api/organizations/${otherCenter}/patients?q=OS-1234`,
+      await as('reception', otherCenter),
+    );
+    expect(search.statusCode).toBe(200);
+    expect(search.json()).toEqual([]);
+  });
+
+  it('accepts the same dependent declared twice, as for the periods of a holder', async () => {
+    const dependent = { holderStatus: 'dependent', startsOn: '2025-01-01', endsOn: '2025-12-31' };
+    expect((await declare(reception, dependent)).statusCode).toBe(201);
+    expect((await declare(reception, { ...dependent, endsOn: undefined })).statusCode).toBe(201);
   });
 
   it('lists the insurers any signed-in user can choose from', async () => {
