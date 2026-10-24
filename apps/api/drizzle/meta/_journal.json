@@ -22,6 +22,13 @@
       "when": 1792857283755,
       "tag": "0002_audit_logs_no_truncate",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792859194343,
+      "tag": "0003_patients",
+      "breakpoints": true
     }
   ]
 }

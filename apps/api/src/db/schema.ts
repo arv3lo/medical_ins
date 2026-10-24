@@ -1,19 +1,24 @@
-import { ORGANIZATION_TYPES, ROLES } from '@medical-ins/shared';
+import { ORGANIZATION_TYPES, ROLES, SEXES } from '@medical-ins/shared';
+import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
+  date,
   index,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
 export const organizationType = pgEnum('organization_type', ORGANIZATION_TYPES);
 export const role = pgEnum('role', ROLES);
+export const sex = pgEnum('sex', SEXES);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -73,6 +78,44 @@ export const sessions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index().on(t.userId)],
+);
+
+/** One record per person, shared by every center that treats them. */
+export const patients = pgTable(
+  'patients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lastName: text('last_name').notNull(),
+    firstNames: text('first_names').notNull(),
+    birthDate: date('birth_date').notNull(),
+    sex: sex('sex').notNull(),
+    nationalId: text('national_id'),
+    phone: text('phone'),
+    address: text('address'),
+    region: text('region'),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('patients_national_id_unique')
+      .on(t.nationalId)
+      .where(sql`${t.nationalId} IS NOT NULL`),
+    index('patients_last_name_birth_date_idx').on(sql`lower(${t.lastName})`, t.birthDate),
+  ],
+);
+
+/** Which centers may see a patient: the ones that registered, received or treated them. */
+export const patientCenterLinks = pgTable(
+  'patient_center_links',
+  {
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.patientId, t.organizationId] }), index().on(t.organizationId)],
 );
 
 /** Append-only: a database trigger rejects UPDATE and DELETE (see migrations). */
