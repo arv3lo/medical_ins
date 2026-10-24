@@ -9,6 +9,7 @@ import type { Env } from './env.js';
 import { HttpError } from './lib/errors.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { organizationRoutes } from './modules/organizations/routes.js';
+import { patientRoutes } from './modules/patients/routes.js';
 import { userRoutes } from './modules/users/routes.js';
 import { registerAuth } from './plugins/auth.js';
 
@@ -29,7 +30,7 @@ export async function buildApp({ db, env }: { db: Db; env: Env }) {
       return reply.status(400).send({ message: 'Données invalides', issues: error.issues });
     }
     if (error instanceof HttpError) {
-      return reply.status(error.statusCode).send({ message: error.message });
+      return reply.status(error.statusCode).send({ ...error.details, message: error.message });
     }
     if ('statusCode' in error && typeof error.statusCode === 'number' && error.statusCode < 500) {
       return reply.status(error.statusCode).send({ message: error.message });
@@ -46,6 +47,7 @@ export async function buildApp({ db, env }: { db: Db; env: Env }) {
   authRoutes(app, { db, env });
   organizationRoutes(app, { db });
   userRoutes(app, { db });
+  patientRoutes(app, { db });
 
   return app;
 }

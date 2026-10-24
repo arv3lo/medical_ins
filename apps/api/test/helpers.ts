@@ -34,7 +34,7 @@ export async function resetDb(db: Db): Promise<void> {
     // Tests only: the replica role skips the append-only triggers on audit_logs.
     await tx.execute(sql`SET LOCAL session_replication_role = replica`);
     await tx.execute(
-      sql`TRUNCATE audit_logs, sessions, memberships, organizations, users RESTART IDENTITY CASCADE`,
+      sql`TRUNCATE audit_logs, sessions, memberships, patient_center_links, patients, organizations, users RESTART IDENTITY CASCADE`,
     );
   });
 }
