@@ -64,9 +64,19 @@ export async function applyTransition(
   const message = await problem(tx, request, input);
   if (message) throw new HttpError(400, message);
 
+  // A grant sets the amount, the patient's share and the validity date together (a DB check
+  // holds that too); the patient pays what the insurer does not cover (FR-010).
+  const grant =
+    input.to === 'granted'
+      ? {
+          grantedAmount: input.grantedAmount!,
+          patientShare: request.estimatedAmount - input.grantedAmount!,
+          validUntil: input.validUntil!,
+        }
+      : undefined;
   await tx
     .update(coverageRequests)
-    .set({ status: input.to })
+    .set({ status: input.to, ...grant })
     .where(eq(coverageRequests.id, request.id));
   await tx.insert(coverageRequestEvents).values({
     coverageRequestId: request.id,
@@ -81,7 +91,11 @@ export async function applyTransition(
     action: `coverage_request.${input.to}`,
     entityType: 'coverage_request',
     entityId: request.id,
-    after: { from: request.status, to: input.to },
+    after: {
+      from: request.status,
+      to: input.to,
+      ...(grant && { grantedAmount: grant.grantedAmount, validUntil: grant.validUntil }),
+    },
     ip: move.ip,
   });
   return { id: request.id, status: input.to };
