@@ -30,9 +30,13 @@ export async function setupTestApp(): Promise<{
 }
 
 export async function resetDb(db: Db): Promise<void> {
-  await db.execute(
-    sql`TRUNCATE audit_logs, sessions, memberships, organizations, users RESTART IDENTITY CASCADE`,
-  );
+  await db.transaction(async (tx) => {
+    // Tests only: the replica role skips the append-only triggers on audit_logs.
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`);
+    await tx.execute(
+      sql`TRUNCATE audit_logs, sessions, memberships, organizations, users RESTART IDENTITY CASCADE`,
+    );
+  });
 }
 
 /** Runs `fn` while every audit_logs insert fails, as if the audit write broke mid-request. */

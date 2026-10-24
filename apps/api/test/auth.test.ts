@@ -55,5 +55,8 @@ describe.skipIf(!TEST_DATABASE_URL)('auth', () => {
     await login(ctx.app, 'doc@example.mg', 'correct-horse');
     await expect(ctx.db.execute(sql`UPDATE audit_logs SET action = 'tampered'`)).rejects.toThrow();
     await expect(ctx.db.execute(sql`DELETE FROM audit_logs`)).rejects.toThrow();
+    await expect(ctx.db.execute(sql`TRUNCATE audit_logs`)).rejects.toThrow();
+    // CASCADE reaches audit_logs through its foreign key to users.
+    await expect(ctx.db.execute(sql`TRUNCATE users CASCADE`)).rejects.toThrow();
   });
 });
