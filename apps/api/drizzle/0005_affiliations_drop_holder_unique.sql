@@ -1,0 +1,1 @@
+DROP INDEX "affiliations_holder_member_number_unique";

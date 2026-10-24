@@ -1,4 +1,4 @@
-import type { AppointmentStatus } from '@medical-ins/shared';
+import type { AppointmentQuery, AppointmentStatus } from '@medical-ins/shared';
 import { and, asc, eq, getTableColumns, gte, lt } from 'drizzle-orm';
 import type { Db, Tx } from '../../db/client.js';
 import { appointments, memberships, patients, users } from '../../db/schema.js';
@@ -18,17 +18,13 @@ function selectAppointments(db: Db | Tx) {
     .innerJoin(users, eq(users.id, appointments.doctorId));
 }
 
-export function listAppointments(
-  db: Db,
-  organizationId: string,
-  filter: { from?: string; to?: string; doctorId?: string; patientId?: string },
-) {
+export function listAppointments(db: Db, organizationId: string, filter: AppointmentQuery) {
   return selectAppointments(db)
     .where(
       and(
         eq(appointments.organizationId, organizationId),
-        filter.from ? gte(appointments.startsAt, new Date(filter.from)) : undefined,
-        filter.to ? lt(appointments.startsAt, new Date(filter.to)) : undefined,
+        gte(appointments.startsAt, new Date(filter.from)),
+        lt(appointments.startsAt, new Date(filter.to)),
         filter.doctorId ? eq(appointments.doctorId, filter.doctorId) : undefined,
         filter.patientId ? eq(appointments.patientId, filter.patientId) : undefined,
       ),
@@ -44,7 +40,22 @@ export async function findAppointment(db: Db | Tx, organizationId: string, id: s
   return row;
 }
 
-export function listDoctors(db: Db, organizationId: string) {
+/**
+ * Reads an appointment of the center and locks its row until the transaction ends, so a
+ * concurrent reschedule or status change waits and then sees this one's result.
+ */
+export async function lockAppointment(tx: Tx, organizationId: string, id: string) {
+  const [row] = await tx
+    .select()
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.organizationId, organizationId)))
+    .for('update');
+  if (!row) throw notFound('Rendez-vous');
+  return row;
+}
+
+/** The active doctors of a center; `doctorId` narrows it to that one. */
+function activeDoctors(db: Db | Tx, organizationId: string, doctorId?: string) {
   return db
     .select({ id: users.id, fullName: users.fullName })
     .from(memberships)
@@ -54,19 +65,17 @@ export function listDoctors(db: Db, organizationId: string) {
         eq(memberships.organizationId, organizationId),
         eq(memberships.role, 'doctor'),
         eq(users.isActive, true),
+        doctorId ? eq(users.id, doctorId) : undefined,
       ),
-    )
-    .orderBy(users.fullName);
+    );
 }
 
-export async function requireDoctorOf(db: Db, organizationId: string, doctorId: string) {
-  const doctor = await db.query.memberships.findFirst({
-    where: and(
-      eq(memberships.organizationId, organizationId),
-      eq(memberships.userId, doctorId),
-      eq(memberships.role, 'doctor'),
-    ),
-  });
+export function listDoctors(db: Db, organizationId: string) {
+  return activeDoctors(db, organizationId).orderBy(users.fullName);
+}
+
+export async function requireDoctorOf(db: Db | Tx, organizationId: string, doctorId: string) {
+  const [doctor] = await activeDoctors(db, organizationId, doctorId);
   if (!doctor) throw new HttpError(400, "Ce médecin n'exerce pas dans ce centre");
 }
 
@@ -74,6 +83,15 @@ export function requireFuture(startsAt: Date) {
   if (startsAt.getTime() < Date.now()) {
     throw new HttpError(400, 'Le rendez-vous ne peut pas être dans le passé');
   }
+}
+
+/**
+ * What the audit log keeps of an appointment: ids and slot only. Never the reason: it is medical
+ * free text, the log is append-only, and the center admins who read it may not see it.
+ */
+export function auditedSlot(row: typeof appointments.$inferSelect) {
+  const { patientId, doctorId, startsAt, durationMinutes, status } = row;
+  return { patientId, doctorId, startsAt, durationMinutes, status };
 }
 
 export const endOf = (startsAt: Date, durationMinutes: number) =>

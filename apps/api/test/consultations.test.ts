@@ -414,7 +414,8 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
       const booked = await inject('POST', `/api/organizations/${center}/appointments`, reception, {
         patientId,
         doctorId: doctorRow!.id,
-        startsAt: '2099-11-03T09:00:00+03:00',
+        // Soon enough for the patient to be marked arrived (from an hour before the start).
+        startsAt: new Date(Date.now() + 30 * 60_000).toISOString(),
         durationMinutes: 20,
       });
       appointmentId = booked.json<{ id: string }>().id;

@@ -3,6 +3,7 @@ import {
   canChangeAppointmentStatus,
   changeAppointmentStatusInputSchema,
   createAppointmentInputSchema,
+  isStatusChangeDue,
   rescheduleAppointmentInputSchema,
 } from '@medical-ins/shared';
 import { eq } from 'drizzle-orm';
@@ -15,10 +16,12 @@ import { HttpError } from '../../lib/errors.js';
 import { requirePermission } from '../../plugins/auth.js';
 import { requireHealthCenter, requireLinkedPatient } from '../patients/service.js';
 import {
+  auditedSlot,
   endOf,
   findAppointment,
   listAppointments,
   listDoctors,
+  lockAppointment,
   requireDoctorOf,
   requireFuture,
   setStatus,
@@ -70,7 +73,7 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
           action: 'appointment.create',
           entityType: 'appointment',
           entityId: created!.id,
-          after: created,
+          after: auditedSlot(created!),
           ip: request.ip,
         });
         return created!.id;
@@ -83,18 +86,19 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     const { orgId, appointmentId } = appointmentParams.parse(request.params);
     const actor = requirePermission(request, orgId, 'appointment.manage');
     const input = rescheduleAppointmentInputSchema.parse(request.body);
-    const before = await findAppointment(db, orgId, appointmentId);
-    if (before.status !== 'scheduled') {
-      throw new HttpError(409, 'Seul un rendez-vous prévu peut être déplacé');
-    }
-    requireFuture(before.startsAt);
-    const startsAt = input.startsAt ? new Date(input.startsAt) : before.startsAt;
-    requireFuture(startsAt);
-    if (input.doctorId) await requireDoctorOf(db, orgId, input.doctorId);
 
-    const durationMinutes = input.durationMinutes ?? before.durationMinutes;
     await withoutOverlap(() =>
       db.transaction(async (tx) => {
+        const before = await lockAppointment(tx, orgId, appointmentId);
+        if (before.status !== 'scheduled') {
+          throw new HttpError(409, 'Seul un rendez-vous prévu peut être déplacé');
+        }
+        requireFuture(before.startsAt);
+        const startsAt = input.startsAt ? new Date(input.startsAt) : before.startsAt;
+        requireFuture(startsAt);
+        if (input.doctorId) await requireDoctorOf(tx, orgId, input.doctorId);
+
+        const durationMinutes = input.durationMinutes ?? before.durationMinutes;
         const [after] = await tx
           .update(appointments)
           .set({ ...input, startsAt, durationMinutes, endsAt: endOf(startsAt, durationMinutes) })
@@ -106,8 +110,8 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
           action: 'appointment.reschedule',
           entityType: 'appointment',
           entityId: appointmentId,
-          before,
-          after,
+          before: auditedSlot(before),
+          after: auditedSlot(after!),
           ip: request.ip,
         });
       }),
@@ -121,9 +125,15 @@ export function appointmentRoutes(app: FastifyInstance, { db }: { db: Db }): voi
     const { status } = changeAppointmentStatusInputSchema.parse(request.body);
 
     await db.transaction(async (tx) => {
-      const before = await findAppointment(tx, orgId, appointmentId);
+      const before = await lockAppointment(tx, orgId, appointmentId);
       if (!canChangeAppointmentStatus(before.status, status)) {
         throw new HttpError(409, 'Ce changement de statut n’est pas possible');
+      }
+      if (!isStatusChangeDue(status, before.startsAt, new Date())) {
+        throw new HttpError(
+          409,
+          'Ce statut ne peut pas encore être enregistré pour ce rendez-vous',
+        );
       }
       await setStatus(tx, appointmentId, status);
       await audit(tx, {

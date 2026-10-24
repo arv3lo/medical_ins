@@ -1,12 +1,17 @@
-import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@medical-ins/shared';
+import type {
+  Appointment,
+  AppointmentQuery,
+  AppointmentStatus,
+  CreateAppointmentInput,
+  RescheduleAppointmentInput,
+} from '@medical-ins/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 const base = (centerId: string) => `/organizations/${centerId}/appointments`;
 
-type Filter = { from?: string; to?: string; doctorId?: string; patientId?: string };
-
-export function useAppointments(centerId: string, filter: Filter) {
+/** The appointments of a center in [from, to): the API refuses a range longer than a quarter. */
+export function useAppointments(centerId: string, filter: AppointmentQuery) {
   const params = new URLSearchParams(
     Object.entries(filter).filter((entry): entry is [string, string] => Boolean(entry[1])),
   );
@@ -39,6 +44,18 @@ export function useChangeAppointmentStatus(centerId: string) {
       api<Appointment>(`${base(centerId)}/${id}/status`, {
         method: 'POST',
         body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments', centerId] }),
+  });
+}
+
+export function useRescheduleAppointment(centerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: RescheduleAppointmentInput & { id: string }) =>
+      api<Appointment>(`${base(centerId)}/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments', centerId] }),
   });

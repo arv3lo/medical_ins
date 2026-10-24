@@ -17,9 +17,6 @@ export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
   no_show: 'Absent',
 };
 
-/** Statuses that still hold the doctor's time slot. */
-export const SLOT_HOLDING_STATUSES = ['scheduled', 'arrived', 'completed'] as const;
-
 const TRANSITIONS: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
   scheduled: ['arrived', 'cancelled', 'no_show'],
   arrived: ['completed'],
@@ -30,6 +27,20 @@ const TRANSITIONS: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
 
 export function canChangeAppointmentStatus(from: AppointmentStatus, to: AppointmentStatus) {
   return TRANSITIONS[from].includes(to);
+}
+
+/** Patients often come early: their arrival can be recorded up to this long before the start. */
+export const EARLY_ARRIVAL_MINUTES = 60;
+
+/**
+ * Whether `to` may be recorded `now` for an appointment starting at `startsAt`. A no-show or a
+ * completion only makes sense once the start has passed; a cancellation is possible at any time.
+ * This keeps a mis-click on « Absent » weeks ahead from freeing the doctor's slot.
+ */
+export function isStatusChangeDue(to: AppointmentStatus, startsAt: Date, now: Date) {
+  if (to === 'cancelled') return true;
+  const margin = to === 'arrived' ? EARLY_ARRIVAL_MINUTES * 60_000 : 0;
+  return now.getTime() >= startsAt.getTime() - margin;
 }
 
 /** An instant with an explicit offset, normalized to UTC ISO so the API compares like with like. */
@@ -67,12 +78,25 @@ export const changeAppointmentStatusInputSchema = z.object({
   status: z.enum(APPOINTMENT_STATUSES),
 });
 
-export const appointmentQuerySchema = z.object({
-  from: instantSchema.optional(),
-  to: instantSchema.optional(),
-  doctorId: z.string().uuid().optional(),
-  patientId: z.string().uuid().optional(),
-});
+/** The longest range one list may cover: a quarter, enough for a patient's recent and next visits. */
+export const MAX_APPOINTMENT_RANGE_DAYS = 92;
+
+/** A list always covers a bounded range, [from, to), so it never returns a center's whole history. */
+export const appointmentQuerySchema = z
+  .object({
+    from: instantSchema,
+    to: instantSchema,
+    doctorId: z.string().uuid().optional(),
+    patientId: z.string().uuid().optional(),
+  })
+  .refine(
+    ({ from, to }) => {
+      const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+      return days > 0 && days <= MAX_APPOINTMENT_RANGE_DAYS;
+    },
+    { message: `Période de ${MAX_APPOINTMENT_RANGE_DAYS} jours au plus`, path: ['to'] },
+  );
+export type AppointmentQuery = z.infer<typeof appointmentQuerySchema>;
 
 export type Appointment = {
   id: string;

@@ -1,7 +1,7 @@
 import type { Role } from '@medical-ins/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, organizations } from '../src/db/schema.js';
+import { auditLogs, organizations, patients } from '../src/db/schema.js';
 import {
   TEST_DATABASE_URL,
   createUser,
@@ -56,6 +56,26 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
 
   const get = (url: string, cookie: string) =>
     ctx.app.inject({ method: 'GET', url, headers: { cookie } });
+
+  const link = (orgId: string, patientId: string, cookie: string) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/api/organizations/${orgId}/patients/${patientId}/link`,
+      headers: { cookie },
+    });
+
+  const update = (
+    orgId: string,
+    patientId: string,
+    cookie: string,
+    payload: Record<string, unknown>,
+  ) =>
+    ctx.app.inject({
+      method: 'PATCH',
+      url: `/api/organizations/${orgId}/patients/${patientId}`,
+      headers: { cookie },
+      payload,
+    });
 
   it('lets reception register a patient, audited in the center', async () => {
     const reception = await as('reception', centerA);
@@ -208,5 +228,144 @@ describe.skipIf(!TEST_DATABASE_URL)('patients', () => {
         (await get(`/api/organizations/${centerA}/patients/${patient.id}`, cookie)).statusCode,
       ).toBe(200);
     }
+  });
+
+  it('refuses to give a patient the CIN of another patient', async () => {
+    const reception = await as('reception', centerA);
+    await create(centerA, reception);
+    const other = (
+      await create(centerA, reception, { ...rakoto, lastName: 'Rabe', nationalId: '202211123456' })
+    ).json<{ id: string }>();
+
+    const response = await update(centerA, other.id, reception, { nationalId: rakoto.nationalId });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ message: 'Un patient existe déjà avec ce CIN' });
+  });
+
+  it('clears an optional field sent as null, with the change in the audit', async () => {
+    const reception = await as('reception', centerA);
+    const patient = (await create(centerA, reception)).json<{ id: string }>();
+
+    const response = await update(centerA, patient.id, reception, {
+      phone: null,
+      nationalId: null,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ phone: null, nationalId: null });
+
+    const [entry] = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'patient.update'));
+    expect(entry!.before).toMatchObject({ phone: '034 12 345 67' });
+    expect(entry!.after).toMatchObject({ phone: null, nationalId: null });
+  });
+
+  it('does not take a homonym without CIN for a CIN conflict', async () => {
+    const reception = await as('reception', centerA);
+    await create(centerA, reception, { ...rakoto, nationalId: null });
+    const response = await create(centerA, reception, { ...rakoto, nationalId: null });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ sameNationalId: false });
+  });
+
+  it('answers 400, not 500, to a birth date that does not exist', async () => {
+    const response = await create(centerA, await as('reception', centerA), {
+      ...rakoto,
+      birthDate: '2023-02-30',
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('runs the duplicate check after a concurrent registration of the same person', async () => {
+    // Another registration of Rakoto, born 1985-03-12, holds the lock and has not committed yet.
+    let inserted!: () => void;
+    const ready = new Promise<void>((resolve) => (inserted = resolve));
+    const concurrent = ctx.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(lower('Rakoto') || '1985-03-12'))`,
+      );
+      await tx.insert(patients).values({ ...rakoto, nationalId: null, sex: 'male' });
+      inserted();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    await ready;
+
+    const response = await create(centerA, await as('reception', centerA), {
+      ...rakoto,
+      nationalId: null,
+    });
+    await concurrent;
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('flags a correction that turns a patient into one already registered', async () => {
+    const reception = await as('reception', centerA);
+    const existing = (await create(centerA, reception)).json<{ id: string }>();
+    const other = (
+      await create(centerA, reception, {
+        ...rakoto,
+        lastName: 'Rabe',
+        birthDate: '1990-01-01',
+        nationalId: null,
+      })
+    ).json<{ id: string }>();
+
+    const response = await update(centerA, other.id, reception, {
+      lastName: 'RAKOTO',
+      birthDate: rakoto.birthDate,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      message: 'Ce patient semble déjà enregistré',
+      sameNationalId: false,
+      duplicates: [{ id: existing.id }],
+    });
+    // Unchanged name and birth date: a homonym can still be corrected.
+    expect((await update(centerA, existing.id, reception, { lastName: 'Rakoto' })).statusCode).toBe(
+      200,
+    );
+  });
+
+  it('audits a link once, and not again when the patient is linked a second time', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const receptionB = await as('reception', centerB);
+
+    expect((await link(centerB, patient.id, receptionB)).statusCode).toBe(204);
+    expect((await link(centerB, patient.id, receptionB)).statusCode).toBe(204);
+
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.action, 'patient.link'), eq(auditLogs.entityId, patient.id)));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.organizationId).toBe(centerB);
+  });
+
+  it('refuses a link to an unknown patient or by a role without patient.create', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const unknown = '00000000-0000-4000-8000-000000000000';
+    expect((await link(centerB, unknown, await as('reception', centerB))).statusCode).toBe(404);
+    expect((await link(centerB, patient.id, await as('doctor', centerB))).statusCode).toBe(403);
+  });
+
+  it('refuses an update from a center the patient is not linked to', async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const response = await update(centerB, patient.id, await as('reception', centerB), {
+      phone: '032 00 000 00',
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("keeps insurer members away from a center's patient routes", async () => {
+    const patient = (await create(centerA, await as('reception', centerA))).json<{ id: string }>();
+    const manager = await as('insurer_manager', insurer);
+    const base = `/api/organizations/${centerA}/patients`;
+
+    expect((await get(base, manager)).statusCode).toBe(403);
+    expect((await get(`${base}/${patient.id}`, manager)).statusCode).toBe(403);
+    expect((await create(centerA, manager, { ...rakoto, nationalId: null })).statusCode).toBe(403);
+    expect((await update(centerA, patient.id, manager, { phone: null })).statusCode).toBe(403);
+    expect((await link(centerA, patient.id, manager)).statusCode).toBe(403);
   });
 });

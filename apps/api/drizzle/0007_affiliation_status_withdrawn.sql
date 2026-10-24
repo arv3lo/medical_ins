@@ -1,0 +1,1 @@
+ALTER TYPE "public"."affiliation_status" ADD VALUE 'withdrawn';
