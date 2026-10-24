@@ -30,7 +30,7 @@ US5) ; les phases suivent la priorité : US1, US2, US3 et US5 (P1), puis US4 (P2
 
 **But** : un environnement de test qui tourne avant d'écrire la première ligne.
 
-- [ ] T001 Recréer la base de test jetable `medins-test-pg` sur le port 5442 (commande dans `specs/001-p3-1-coverage-model/quickstart.md`), installer les dépendances (`pnpm install --frozen-lockfile`), et vérifier que `pnpm test` passe sur `feat/p3-1-coverage-model` avant tout changement.
+- [x] T001 Recréer la base de test jetable `medins-test-pg` sur le port 5442 (commande dans `specs/001-p3-1-coverage-model/quickstart.md`), installer les dépendances (`pnpm install --frozen-lockfile`), et vérifier que `pnpm test` passe sur `feat/p3-1-coverage-model` avant tout changement.
 
 ---
 
@@ -40,19 +40,19 @@ US5) ; les phases suivent la priorité : US1, US2, US3 et US5 (P1), puis US4 (P2
 
 **⚠️** Aucun récit ne commence avant la fin de cette phase.
 
-- [ ] T002 Squelette partagé `packages/shared/src/schemas/coverage-requests.ts` :
+- [x] T002 Squelette partagé `packages/shared/src/schemas/coverage-requests.ts` :
   - `COVERAGE_REQUEST_STATUSES` et le type `CoverageRequestStatus` ;
   - `COVERAGE_REQUEST_STATUS_LABELS` (brouillon, soumise, en examen, accordée, refusée, complément demandé, utilisée, facturée, annulée, expirée) ;
   - `FINAL_STATUSES` (`rejected`, `cancelled`, `expired`, `billed`) ;
   - le type `CoverageRequestActor = 'center' | 'insurer' | 'system'` ;
   - l'export depuis `packages/shared/src/index.ts`.
-- [ ] T003 Ajouter à `apps/api/src/db/schema.ts` :
+- [x] T003 Ajouter à `apps/api/src/db/schema.ts` :
   - l'énumération `coverage_request_status` (`draft`, `submitted`, `under_review`, `granted`, `rejected`, `info_requested`, `used`, `billed`, `cancelled`, `expired`), dont les valeurs viennent de `COVERAGE_REQUEST_STATUSES` (T002) ;
   - la table `medical_acts` : `code` text PK, `label` text non nul, `reference_price` integer non nul avec CHECK `> 0`.
 
   Ces deux éléments servent tous les récits.
 
-- [ ] T004 Ajouter `coverage_requests` à `apps/api/src/db/schema.ts`, colonnes et index exactement comme dans `data-model.md` :
+- [x] T004 Ajouter `coverage_requests` à `apps/api/src/db/schema.ts`, colonnes et index exactement comme dans `data-model.md` :
   - FK `center_id`, `insurer_id`, `patient_id`, `affiliation_id`, `diagnosis_code` (→ `icd10_codes`) et `created_by` ;
   - `estimated_amount` integer non nul `≥ 0` ;
   - `granted_amount` et `patient_share` integer nullables ;
@@ -62,22 +62,22 @@ US5) ; les phases suivent la priorité : US1, US2, US3 et US5 (P1), puis US4 (P2
   - CHECK `patient_share = estimated_amount − granted_amount` quand `granted_amount` est posé ;
   - CHECK « `granted_amount`, `patient_share` et `valid_until` posés ensemble » ;
   - index `(center_id, status)`, `(insurer_id, status)` et `(patient_id)`.
-- [ ] T005 Ajouter `coverage_request_items` à `apps/api/src/db/schema.ts` :
+- [x] T005 Ajouter `coverage_request_items` à `apps/api/src/db/schema.ts` :
   - `act_code` FK → `medical_acts`, `act_label` text non nul ;
   - `quantity` CHECK `≥ 1`, `unit_price` CHECK `> 0` ;
   - `line_amount` CHECK `= quantity × unit_price` ;
   - `position` integer non nul ; index `(coverage_request_id)`.
-- [ ] T006 Ajouter `coverage_request_events` à `apps/api/src/db/schema.ts` :
+- [x] T006 Ajouter `coverage_request_events` à `apps/api/src/db/schema.ts` :
   - `from_status` nullable, `to_status` non nul ;
   - `actor_user_id` FK nullable (nul pour `system`), `reason` text nullable ;
   - `created_at` défaut `now()` ; index `(coverage_request_id, created_at)` ;
   - un commentaire qui renvoie au trigger d'ajout seul (T007).
-- [ ] T007 Générer les migrations dans `apps/api/drizzle/`, depuis la racine :
+- [x] T007 Générer les migrations dans `apps/api/drizzle/`, depuis la racine :
   - `pnpm db:generate`, renommer en `0013_coverage_requests` (relire le SQL) ;
   - `pnpm --filter @medical-ins/api exec drizzle-kit generate --custom --name coverage_request_events_append_only`, avec un trigger qui rejette UPDATE et DELETE sur `coverage_request_events`, sur le modèle de `apps/api/drizzle/0011_consultations_read_only.sql` ;
   - `--custom --name medical_acts_starter` : une vingtaine d'actes courants (consultation générale, consultation spécialisée, échographie abdominale, radiographie thoracique, NFS, glycémie, TDR paludisme, ECG, accouchement par voie basse, césarienne, petite chirurgie, hospitalisation par jour…), avec codes locaux (`CONS-GEN`…), `INSERT … ON CONFLICT DO NOTHING`, et un en-tête qui dit que les tarifs sont **indicatifs, à valider par le propriétaire avant la production**.
-- [ ] T008 Squelette du module : `apps/api/src/modules/coverage-requests/routes.ts` (fonction `coverageRequestRoutes(app, { db })`, vide), `service.ts` et `transitions.ts`. Enregistrer les routes dans `apps/api/src/app.ts`, et ajouter `coverage_request_events`, `coverage_request_items` et `coverage_requests` au `TRUNCATE` de `resetDb` dans `apps/api/test/helpers.ts`, en ordre de dépendance, sans `medical_acts`, qui est un référentiel de migration.
-- [ ] T009 Vérifier que `pnpm typecheck`, `pnpm lint` et `pnpm test` passent (migrations `apps/api/drizzle/0013` à `0015` appliquées sur une base vide), puis committer les fondations. Les migrations et le schéma partent dans un commit `feat(api):` à part.
+- [x] T008 Squelette du module : `apps/api/src/modules/coverage-requests/routes.ts` (fonction `coverageRequestRoutes(app, { db })`, vide), `service.ts` et `transitions.ts`. Enregistrer les routes dans `apps/api/src/app.ts`, et ajouter `coverage_request_events`, `coverage_request_items` et `coverage_requests` au `TRUNCATE` de `resetDb` dans `apps/api/test/helpers.ts`, en ordre de dépendance, sans `medical_acts`, qui est un référentiel de migration. _Fait en partie : `resetDb` est à jour ; le module et son enregistrement dans `app.ts` arrivent avec la première route (T020), un module vide ne passant pas le lint._
+- [x] T009 Vérifier que `pnpm typecheck`, `pnpm lint` et `pnpm test` passent (migrations `apps/api/drizzle/0013` à `0015` appliquées sur une base vide), puis committer les fondations. Les migrations et le schéma partent dans un commit `feat(api):` à part.
 
 **Point de contrôle** : le schéma existe, les tests existants passent, et le module est vide.
 
