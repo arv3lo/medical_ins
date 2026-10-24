@@ -1,5 +1,5 @@
 import type { Role } from '@medical-ins/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auditLogs, organizations } from '../src/db/schema.js';
 import { TEST_DATABASE_URL, memberCookie, resetDb, setupTestApp } from './helpers.js';
@@ -56,6 +56,19 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
         ...payload,
       },
     });
+
+  /** Waits until `count` other sessions are blocked on a lock held by the test. */
+  const waitForLockWaiters = async (count: number) => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const [row] = await ctx.db.execute<{ waiting: number }>(
+        sql`SELECT count(*)::int AS waiting FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+      );
+      if (row!.waiting >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`${count} sessions never waited on the lock`);
+  };
 
   const inject = (method: 'GET' | 'POST', url: string, cookie: string, payload?: object) =>
     ctx.app.inject({ method, url, headers: { cookie }, payload });
@@ -184,6 +197,32 @@ describe.skipIf(!TEST_DATABASE_URL)('affiliations', () => {
     expect((await inject('POST', url, await as('medical_advisor', ostie), {})).statusCode).toBe(
       403,
     );
+  });
+
+  it('lets only the first of two concurrent decisions through', async () => {
+    const affiliation = (await declare(reception)).json<{ id: string }>();
+    const url = `/api/organizations/${ostie}/affiliations/${affiliation.id}`;
+    const manager = await as('insurer_manager', ostie);
+
+    // Hold the row so that both requests have read it as pending before either one writes.
+    const decisions = await ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM affiliations WHERE id = ${affiliation.id} FOR UPDATE`);
+      const both = Promise.all([
+        inject('POST', `${url}/validate`, manager),
+        inject('POST', `${url}/reject`, manager, { reason: 'Numéro inconnu' }),
+      ]);
+      await waitForLockWaiters(2);
+      // Not awaited here: the requests can only finish once this transaction releases the row.
+      return { both };
+    });
+    const [validated, rejected] = await decisions.both;
+
+    expect([validated.statusCode, rejected.statusCode].sort()).toEqual([200, 409]);
+    const entries = await ctx.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.entityId, affiliation.id));
+    expect(entries.map((d) => d.action).filter((a) => a !== 'affiliation.create')).toHaveLength(1);
   });
 
   it('requires a reason to reject', async () => {

@@ -76,11 +76,14 @@ export async function decideAffiliation(
     where: and(eq(affiliations.id, affiliationId), eq(affiliations.insurerId, insurerId)),
   });
   if (!before) throw notFound('Affiliation');
-  if (before.status !== 'pending') throw new HttpError(409, 'Cette affiliation a déjà été traitée');
+  const alreadyDecided = new HttpError(409, 'Cette affiliation a déjà été traitée');
+  if (before.status !== 'pending') throw alreadyDecided;
+  // Conditional, so that a concurrent decision made since the read leaves nothing to update.
   const [after] = await tx
     .update(affiliations)
     .set(decision)
-    .where(eq(affiliations.id, affiliationId))
+    .where(and(eq(affiliations.id, affiliationId), eq(affiliations.status, 'pending')))
     .returning();
-  return { before, after: after! };
+  if (!after) throw alreadyDecided;
+  return { before, after };
 }
