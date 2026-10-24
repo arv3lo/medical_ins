@@ -17,8 +17,10 @@ import {
   requirePatientAffiliation,
 } from './service.js';
 
+/** The shared conditions of every move, then, for a submission, those that need the affiliation. */
 async function problem(tx: Tx, request: CoverageRequestRow, input: TransitionInput) {
-  if (input.to !== 'submitted') return transitionProblem(request.status, input, request);
+  const general = transitionProblem(request.status, input, request);
+  if (general || input.to !== 'submitted') return general;
   const affiliation = await requirePatientAffiliation(tx, request.patientId, request.affiliationId);
   return submissionProblem(affiliation, {
     diagnosisCode: request.diagnosisCode,
