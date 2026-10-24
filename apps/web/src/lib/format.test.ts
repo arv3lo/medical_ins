@@ -6,6 +6,7 @@ import {
   formatDate,
   formatLocalDate,
   formatTime,
+  localPartsOf,
   toInstant,
   weekRange,
 } from './format';
@@ -51,5 +52,12 @@ describe('format', () => {
     expect(weekRange('2026-11-05')).toEqual(week);
     expect(weekRange('2026-11-02')).toEqual(week);
     expect(weekRange('2026-11-08')).toEqual(week);
+  });
+
+  it('splits an instant into the local date and time a form shows', () => {
+    expect(localPartsOf(toInstant('2026-11-03', '09:30'))).toEqual({
+      date: '2026-11-03',
+      time: '09:30',
+    });
   });
 });

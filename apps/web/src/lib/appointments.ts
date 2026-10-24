@@ -3,6 +3,7 @@ import type {
   AppointmentQuery,
   AppointmentStatus,
   CreateAppointmentInput,
+  RescheduleAppointmentInput,
 } from '@medical-ins/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
@@ -43,6 +44,18 @@ export function useChangeAppointmentStatus(centerId: string) {
       api<Appointment>(`${base(centerId)}/${id}/status`, {
         method: 'POST',
         body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments', centerId] }),
+  });
+}
+
+export function useRescheduleAppointment(centerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: RescheduleAppointmentInput & { id: string }) =>
+      api<Appointment>(`${base(centerId)}/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments', centerId] }),
   });

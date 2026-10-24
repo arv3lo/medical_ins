@@ -13,6 +13,11 @@ import { formatLocalDate, formatTime } from '@/lib/format';
 import { ErrorAlert } from '@/components/error-alert';
 import { AppointmentActions } from './appointment-actions';
 import { AppointmentStatusBadge } from './appointment-status-badge';
+import { RescheduleAppointmentDialog } from './reschedule-appointment-dialog';
+
+/** Only an appointment still to come can move; a past one can only be closed (P2.3). */
+const isMovable = (a: Appointment) =>
+  a.status === 'scheduled' && Date.parse(a.startsAt) > Date.now();
 
 /** Appointments of a center; `showDate` for lists spanning several days. */
 export function AppointmentsTable({
@@ -68,12 +73,17 @@ export function AppointmentsTable({
               </TableCell>
               {canManage && (
                 <TableCell>
-                  <AppointmentActions
-                    status={a.status}
-                    startsAt={a.startsAt}
-                    pending={change.isPending}
-                    onChange={(status) => change.mutate({ id: a.id, status })}
-                  />
+                  <div className="flex justify-end gap-2">
+                    {isMovable(a) && (
+                      <RescheduleAppointmentDialog centerId={centerId} appointment={a} />
+                    )}
+                    <AppointmentActions
+                      status={a.status}
+                      startsAt={a.startsAt}
+                      pending={change.isPending}
+                      onChange={(status) => change.mutate({ id: a.id, status })}
+                    />
+                  </div>
                 </TableCell>
               )}
             </TableRow>
