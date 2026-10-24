@@ -39,7 +39,8 @@ same locally before pushing.
 - **Access is checked on the server.** Routes call `requireUser` / `requireSuperAdmin` /
   `requirePermission`; the permission matrix lives only in `packages/shared/src/roles.ts`.
 - **Only the super admin creates user accounts.** Organization admins attach existing accounts.
-- **Medical content is for care roles only**; insurers see only what a decision needs.
+- **Medical content is for care roles only**; insurers see only what a decision needs, and the
+  super admin gets no medical permission without a care role (`superAdminBypasses`).
 
 ## Working on this repo
 

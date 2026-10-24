@@ -4,9 +4,14 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { Layout } from './Layout';
 import { createQueryClient } from './lib/query-client';
+import { AgendaPage } from './pages/AgendaPage';
+import { ConsultationPage } from './pages/ConsultationPage';
 import { HomePage } from './pages/HomePage';
+import { InsuredPage } from './pages/InsuredPage';
 import { LoginPage } from './pages/LoginPage';
 import { OrganizationsPage } from './pages/OrganizationsPage';
+import { PatientPage } from './pages/PatientPage';
+import { PatientsPage } from './pages/PatientsPage';
 import './index.css';
 
 const queryClient = createQueryClient();
@@ -20,6 +25,14 @@ createRoot(document.getElementById('root')!).render(
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="/organizations" element={<OrganizationsPage />} />
+            <Route path="/patients" element={<PatientsPage />} />
+            <Route path="/patients/:patientId" element={<PatientPage />} />
+            <Route
+              path="/patients/:patientId/consultations/:consultationId"
+              element={<ConsultationPage />}
+            />
+            <Route path="/assures" element={<InsuredPage />} />
+            <Route path="/agenda" element={<AgendaPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -2,6 +2,8 @@ export class HttpError extends Error {
   constructor(
     readonly statusCode: number,
     message: string,
+    /** Extra fields sent next to `message`, for a client that can act on them. */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }

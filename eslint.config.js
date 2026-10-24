@@ -7,6 +7,10 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // `const { omitted, ...rest } = value` is how fields are dropped from an object.
+    rules: { '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }] },
+  },
+  {
     files: ['apps/web/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,

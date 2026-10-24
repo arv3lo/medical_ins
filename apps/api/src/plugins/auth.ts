@@ -1,5 +1,5 @@
 import type { CurrentUser, Permission, Role } from '@medical-ins/shared';
-import { hasPermission } from '@medical-ins/shared';
+import { hasPermission, superAdminBypasses } from '@medical-ins/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Db } from '../db/client.js';
 import { loadCurrentUser } from '../lib/current-user.js';
@@ -38,13 +38,17 @@ export function rolesIn(user: CurrentUser, organizationId: string): Role[] {
   return user.memberships.filter((m) => m.organizationId === organizationId).map((m) => m.role);
 }
 
-/** Super admins pass; everyone else needs a role granting `permission` in that organization. */
+/**
+ * A role granting `permission` in that organization is required; super admins pass without one,
+ * except for medical content.
+ */
 export function requirePermission(
   request: FastifyRequest,
   organizationId: string,
   permission: Permission,
 ): CurrentUser {
   const user = requireUser(request);
-  if (user.isSuperAdmin || hasPermission(rolesIn(user, organizationId), permission)) return user;
+  if (user.isSuperAdmin && superAdminBypasses(permission)) return user;
+  if (hasPermission(rolesIn(user, organizationId), permission)) return user;
   throw forbidden();
 }

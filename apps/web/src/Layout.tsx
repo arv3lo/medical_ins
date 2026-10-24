@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 import { ErrorAlert } from '@/components/error-alert';
 import { Button } from '@/components/ui/button';
+import { centersWith, organizationsWith } from '@/lib/centers';
 import { cn } from '@/lib/utils';
 import { useCurrentUser, useLogout } from './lib/auth';
 
@@ -37,6 +38,21 @@ export function Layout() {
           <NavLink to="/" end className={navLinkClass}>
             Accueil
           </NavLink>
+          {centersWith(user, 'appointment.read').length > 0 && (
+            <NavLink to="/agenda" className={navLinkClass}>
+              Agenda
+            </NavLink>
+          )}
+          {centersWith(user, 'patient.read_admin').length > 0 && (
+            <NavLink to="/patients" className={navLinkClass}>
+              Patients
+            </NavLink>
+          )}
+          {organizationsWith(user, 'insured.manage', 'insurer').length > 0 && (
+            <NavLink to="/assures" className={navLinkClass}>
+              Assurés
+            </NavLink>
+          )}
           {user.isSuperAdmin && (
             <NavLink to="/organizations" className={navLinkClass}>
               Organisations

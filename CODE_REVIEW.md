@@ -1,113 +1,395 @@
-# Code review: PR #1 "Socle technique : monorepo, API, app web, docker-compose"
+# Code review: PRs #4 to #9 (patients, affiliations, appointments, consultations, super admin, animations)
 
-- Target: PR #1, `feat/socle-technique` (0cc65ac) against `main`
-- Effort: xhigh (recall-oriented, no verification pass, so some findings may be uncertain)
-- Scope: whole diff except `pnpm-lock.yaml` and the generated drizzle snapshots
+- Targets, in stack order (each against its base, merge commits from the base excluded):
+  - PR #4 "P2.1 : patients", `feat/p2-1-patients` (17f6547) against `feat/p1-0-shadcn`
+  - PR #5 "P2.2 : affiliations", `feat/p2-2-affiliations` (c61943f) against `feat/p2-1-patients`
+  - PR #6 "P2.3 : rendez-vous", `feat/p2-3-appointments` (1b3cbf3) against `feat/p2-2-affiliations`
+  - PR #7 "P2.4 : consultations", `feat/p2-4-consultations` (707698e) against `feat/p2-3-appointments`
+  - PR #8 "Retirer au super admin l'accès au contenu médical", `feat/super-admin-no-medical`
+    (122cd7c) against `feat/p2-4-consultations`
+  - PR #9 "Animations : Animate.css", `feat/animate-css` (6743d2a) against `feat/p1-0-shadcn`
 - Date: 2026-10-24
+- Checked: every diff except `pnpm-lock.yaml`, `apps/api/drizzle/meta` and the vendored
+  `components/ui/*` (aligned with the shadcn registry earlier today). PRs #4 to #7 were read by one
+  reviewer each, and the main findings were re-checked against the code: the decide, reschedule and
+  status races, the affiliation index, the audit payloads, the date checks (`Date.parse('2023-02-30')`
+  is accepted) and the line numbers. #8 and #9 were reviewed by hand. Acceptance criteria come from
+  `docs/ROADMAP.md` (PR #2). CI is green on every PR. The API tests were not run as part of this
+  review.
+- Line numbers refer to the file at the head of the PR being reviewed.
 
 ## Fix status
 
-Fixes are on `feat/socle-technique`, one commit per finding, each bug fix reproduced first by a
-failing test (or by hand for build, Docker and nginx issues). Final run: lint, typecheck, 29 tests
-(API against a real Postgres 16), build, both Docker images, API image smoke test.
+Fixes are on each PR's branch, one commit per finding, each behavior change reproduced by a test
+seen failing first (coverage-only tests noted). They were merged down the stack in order
+(#4 → #5 → #6 → #7 → #8). Final run on #8 (the top): lint, typecheck, Prettier, build,
+40 shared + 53 web + 99 API tests against a fresh Postgres 16.
 
-| #   | Finding                                  | Outcome                                                                                                                                      | Commit    |
-| --- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1   | Account takeover through add-member      | Fixed (owner's choice): only the super admin creates accounts (`POST /api/users`); add-member attaches existing accounts only, 404 otherwise | `516b9cb` |
-| 2   | Audit written outside the transaction    | Fixed: `audit(tx, …)` inside the change's transaction (organizations, memberships, login, logout)                                            | `7ddbc6c` |
-| 3   | Login timing reveals accounts            | Fixed: verify against a dummy hash when no active account matches                                                                            | `241e986` |
-| 4   | TRUNCATE wipes the audit log             | Fixed: migration `0002` adds a statement-level TRUNCATE trigger; test resets skip triggers explicitly                                        | `39f284a` |
-| 5   | `trustProxy: true`                       | Fixed: `TRUST_PROXY_HOPS` (default 0, docker-compose sets 1 for Caddy)                                                                       | `5cb7409` |
-| 6   | Account creation not audited             | Fixed with #1: `user.create` audited, without the password hash                                                                              | `516b9cb` |
-| 7   | Seed password in the api container       | Fixed: one-off `seed` service (`docker compose run --rm seed`)                                                                               | `8a7e9a2` |
-| 8   | Migrations folder wrong from `dist/`     | Fixed: folder resolved from the package root; `MIGRATIONS_DIR` removed                                                                       | `a3cb663` |
-| 9   | Main-module check misses encoded paths   | Fixed: separate `migrate-cli.ts` entry, no main-module check                                                                                 | `a3cb663` |
-| 10  | Password not URL-encoded in DATABASE_URL | Fixed in docs: compose, `.env.example` and README ask for a URL-safe password (`openssl rand -hex 32`)                                       | `8a7e9a2` |
-| 11  | `.env` not loaded by vitest              | Fixed: `vitest.config.ts` loads the repository `.env`                                                                                        | `af0c2f1` |
-| 12  | List error hidden, no global 401         | Fixed: any 401 clears the session; the organization list shows its error                                                                     | `589841f` |
-| 13  | Race on a new email                      | Fixed with #1: `POST /api/users` uses `ON CONFLICT DO NOTHING` and answers 409                                                               | `516b9cb` |
-| 14  | Outage redirects to login                | Fixed: the layout shows the error with a retry button                                                                                        | `ae13c52` |
-| 15  | `index.html` cached                      | Fixed: `Cache-Control: no-cache` on `index.html` and SPA routes                                                                              | `b061a60` |
+**Migrations renumbered.** #5's fixes added 0005–0007, so #6's migrations were regenerated on top
+as 0008–0009 and #7's as 0010–0012 (generated SQL identical to before; custom SQL copied as is).
+Any local database that ran the old 0005–0009 must be recreated.
 
-Below the cap:
+| #   | Outcome                                                                                                                                                                       | Commit                          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| A   | Fixed: `today()` in `Indian/Antananarivo` (shared `dates.ts`), used by the schemas and the web forms                                                                          | `ec9f21a`, `067eeb7`            |
+| B   | Fixed where found: row locks or conditional updates in affiliations (#10), appointments (#17, #18), consultations (#27)                                                       | see those rows                  |
+| C   | Fixed: `isoDateSchema` checks a real calendar day from 1900 on                                                                                                                | `802580a`, `11275ab`            |
+| 1   | Fixed: 409 « Un patient existe déjà avec ce CIN » on update                                                                                                                   | `463d433`                       |
+| 2   | Fixed: optional fields accept `null`; the form sends `null` for an emptied field                                                                                              | `542e4ee`                       |
+| 3   | No change (owner decision: any center may link a patient; recorded in the decision log); `/link` tests added with #7                                                          | `8c0bc21` (roadmap)             |
+| 4   | Fixed with C                                                                                                                                                                  | `11275ab`                       |
+| 5   | Fixed with A                                                                                                                                                                  | `067eeb7`                       |
+| 6   | Fixed: duplicate check inside the transaction under an advisory lock, and on PATCH when name or birth date change                                                             | `e0555c5`                       |
+| 7   | Tests added (coverage of existing behavior; regression-checked by breaking the route)                                                                                         | `4238aa1`                       |
+| 8   | Fixed: the warning shows the API's message                                                                                                                                    | `b545afe`                       |
+| 9   | Fixed: exclusion constraint (one number, one patient; rejected and withdrawn rows don't count), plus « Retirer » for a pending declaration (`withdrawn` status, audited)      | `e10f208`, `9b42b1e`, `9a5f806` |
+| 10  | Fixed: decide only applies while pending, 409 otherwise (race test)                                                                                                           | `a4f4606`                       |
+| 11  | Fixed with A                                                                                                                                                                  | `ec9f21a`                       |
+| 12  | Fixed: explicit insurer projection, exact keys tested                                                                                                                         | `b152469`                       |
+| 13  | Fixed: pages of 50 with « Charger plus », member-number filter                                                                                                                | `9f832bc`, `748ee6c`, `3a09659` |
+| 14  | Fixed: permission checked before the body                                                                                                                                     | `05b740a`                       |
+| 15  | Fixed: the form remounts on each opening (no DOM test environment, so untested)                                                                                               | `523d31f`                       |
+| 16  | Tests added; declaring the same dependent twice is tested as allowed (several periods)                                                                                        | `f39e5df`                       |
+| 17  | Fixed: reschedule reads and checks the row under `FOR UPDATE` (race test)                                                                                                     | `3042856`                       |
+| 18  | Fixed: status change locks the row (race test)                                                                                                                                | `26ee0e1`                       |
+| 19  | Fixed: Jour / Semaine toggle, « Mes rendez-vous » (next 30 days), « Déplacer » dialog                                                                                         | `d2027f0`, `de8d274`, `907def4` |
+| 20  | Fixed: « Arrivé » from 60 min before the start, « Absent » / « Terminé » once started, « Annuler » anytime (shared `isStatusChangeDue`)                                       | `37770b6`                       |
+| 21  | Fixed: one query of the center's active doctors for listing and booking                                                                                                       | `ad9dd6f`                       |
+| 22  | Tests added (past move, other center's doctor, nurse as doctor, cross-center 404, audits)                                                                                     | `0404d12`                       |
+| 23  | Fixed: agenda keyed on the center, dialog date reset on open (untested, no DOM environment)                                                                                   | `decd75c`                       |
+| 24  | Fixed: `GET /appointments` requires a range of at most 92 days; the patient card shows −30 / +62 days                                                                         | `30bc72d`                       |
+| 25  | `SLOT_HOLDING_STATUSES` removed (`53178fa`); keeping query params on center change is intended and tested (`e73af39`); reception seeing the reason is an owner decision (log) | `53178fa`, `e73af39`            |
+| —   | Also fixed (found while fixing #26): appointment audit entries no longer store the free-text reason                                                                           | `47bc8ec`                       |
+| 26  | Fixed: consultation audits hold ids and metadata only (`fields` names, `signedAt`, `addendumId`, `patientId`/`appointmentId`); marker-string test over every audit row        | `47f2124`                       |
+| 27  | Fixed: the draft row is locked for PATCH and sign; races answer 409. The trigger exception isn't mapped (no API path reaches it any more)                                     | `991c7cc`                       |
+| 28  | Fixed: the list is audited as `medical_record.read` with the returned ids                                                                                                     | `1cba97f`                       |
+| 29  | Fixed: every write returns ids only (the addendum returns itself); the client refetches through the audited GET                                                               | `19aa118`                       |
+| 30  | Fixed: the editor only where the draft can be saved                                                                                                                           | `c26bf11`                       |
+| 31  | Tests added for every read-only trigger                                                                                                                                       | `d44c4a9`                       |
+| 32  | Fixed: the comment states the French ICD-10 wording and that source and license must be confirmed (open question added to the roadmap); drizzle doesn't re-check file hashes  | `c8e0dd2`                       |
+| 33  | Fixed: `Record<Permission, boolean>` allow-list; coverage requests are no longer open to the super admin                                                                      | `33c062f`                       |
+| 34  | No change (owner decision: Animate.css is deliberate; recorded in the decision log)                                                                                           | `8c0bc21` (roadmap)             |
 
-| Item                                         | Outcome                                                                                                                                                                              | Commit    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
-| Claude attribution on efdd462 and PR body    | Fixed: commit rewritten as `0cc65ac` (author and committer set to the owner, `Co-Authored-By`/`Claude-Session` trailers dropped, same tree); credit line removed from the PR #1 body | `0cc65ac` |
-| `onRequest` runs 3 queries per request       | Not fixed: a performance tweak with no measured problem; revisit when the auth hook grows                                                                                            | —         |
-| argon2 hash inside the transaction           | Fixed with #1: `POST /api/users` hashes before opening the transaction                                                                                                               | `516b9cb` |
-| Organization type labels written three times | Fixed: `ORGANIZATION_TYPE_LABELS` in `packages/shared`                                                                                                                               | `0271497` |
-| `addMemberInputSchema` only in the API       | Fixed with #1: moved to `packages/shared`                                                                                                                                            | `516b9cb` |
-| `organizationSchema` null/updatedAt          | Fixed                                                                                                                                                                                | `28b3589` |
-| Expired sessions never purged                | Fixed: purged on each login                                                                                                                                                          | `008c06b` |
-| Tests near the login rate limit              | Fixed: each test login comes from its own address                                                                                                                                    | `d9c80c1` |
-| `/organizations` route not guarded           | Not fixed: the link is hidden for non-super-admins, the API answers 403 and the page now shows "Accès refusé" (#12); a client-side guard would only duplicate the server rule        | —         |
-| Seed ignores an existing non-admin email     | Fixed: the seed fails instead of reporting success; it never promotes an account silently                                                                                            | `6b227ba` |
-| `COOKIE_SECURE` false in production          | Fixed: defaults to Secure when `NODE_ENV=production`                                                                                                                                 | `f7a3a5a` |
-| `engines` allows Node < 22.9                 | Fixed: `>=22.9`                                                                                                                                                                      | `5b7c630` |
-| `api()` drops a `Headers` instance           | Fixed                                                                                                                                                                                | `fbc015a` |
+Merge fix-ups: the agenda passes `consultAs` through the new day, week and « Mes rendez-vous »
+lists, and the consultation test books its appointment 30 minutes ahead because of #20
+(`437b6e7`).
 
-## Findings (most severe first)
+## Across the stack
 
-1. **apps/api/src/modules/organizations/routes.ts:84**: adding a member by email silently reuses any existing account, and the first person to add an email sets its password. That lets someone take over an account before its owner ever uses it.
-   - Scenario: the center admin of center A adds `advisor@ostie.mg` as `doctor` and sets `initialPassword` to a value they know. Later the OSTIE insurer manager (or the super admin) adds `advisor@ostie.mg` as `medical_advisor`. The account already exists, so `fullName`/`initialPassword` are ignored and nobody is told. The center admin can now log in as an OSTIE medical advisor (`coverage_request.decide`). The same branch also reveals whether an email has an account: a 400 asking for `fullName` and `initialPassword` means no account, a 201 or 409 means one exists.
+Three problems show up in several PRs. Fixing each in one place covers every PR that has it.
 
-2. **apps/api/src/modules/organizations/routes.ts:110** (also line 41 and `apps/api/src/lib/audit.ts:15`): audit entries are written after the action's transaction commits, outside it. `audit(db: Db, …)` only accepts the root `Db`, so callers cannot put the audit write inside the transaction.
-   - Scenario: the organization insert at line 40 succeeds, then the audit insert fails (connection reset, timeout). The client gets a 500, the organization stays without any audit row, and the user clicks "Ajouter" again, which creates a duplicate organization (there is no unique constraint on the name). The same thing happens with memberships: the transaction commits, the audit fails, and the retry returns 409. That breaks the README's promise that every action is audited. Fix: let `audit` take a `Db | Tx` and run each action and its audit write in one transaction.
+- **A. "Today" is the UTC date** (#4 finding 5, #5 finding 11). `new Date().toISOString().slice(0, 10)`
+  gives the wrong day between 00:00 and 03:00 in Madagascar (UTC+3). It belongs in one shared helper
+  in `packages/shared/src/schemas/dates.ts`, computed in `Indian/Antananarivo`, with a unit test at
+  22:30 UTC.
+- **B. Check, then update without a lock** (findings 10, 17, 18, 27). The state is read, checked in JS,
+  and then updated with `WHERE id = …` only. Two concurrent requests both pass the check. The fix is
+  the same everywhere: `SELECT … FOR UPDATE` inside the transaction, or a conditional
+  `UPDATE … WHERE status = <expected>` that answers 409 when no row is updated.
+- **C. Calendar dates are validated with `Date.parse`** (finding 4; #5 moves it into the shared
+  `isoDateSchema`). V8 accepts `2023-02-30` and rolls it to March 2, and Postgres then rejects the value
+  with a 500. The fix is a round-trip check (`Date.UTC(y, m - 1, d)` must give back the same string)
+  and a minimum year.
 
-3. **apps/api/src/modules/auth/routes.ts:21**: login only runs argon2 `verifyPassword` when the user exists and is active. Unknown or deactivated emails answer measurably faster.
-   - Scenario: timing `POST /api/auth/login` across candidate emails shows which addresses have active accounts (roughly a 20–50 ms argon2 gap), even though the error message is the same. Fix: verify against a dummy hash when the user is missing or inactive.
+## PR #4: patients
 
-4. **apps/api/drizzle/0001_audit_logs_append_only.sql:9**: the append-only trigger is `BEFORE UPDATE OR DELETE … FOR EACH ROW`, so it does not cover `TRUNCATE`.
-   - Scenario: `TRUNCATE audit_logs`, or `TRUNCATE users CASCADE` (CASCADE follows the foreign key from `audit_logs`), wipes the whole audit log without error. The test helper `resetDb` relies on exactly this. Fix: add a `BEFORE TRUNCATE … FOR EACH STATEMENT` trigger, and have tests disable it or use a dedicated role.
+### 1. Changing the CIN to one another patient has returns a 500 (medium)
 
-5. **apps/api/src/app.ts:18**: `trustProxy: true` trusts every `X-Forwarded-For` hop, so a client can set `request.ip` to anything. The login rate limit and the audit `ip` column are both keyed on it.
-   - Scenario: under `pnpm dev` the API binds `0.0.0.0:3000`, and the same happens with any deployment where the API is reachable without Caddy or sits behind another proxy or CDN. An attacker sends a fresh `X-Forwarded-For` value on each attempt, gets unlimited login attempts past the 10/min limit, and forges the IPs in the audit log. Fix: trust a hop count (`1`) or the Caddy network.
+- Where: `apps/api/src/modules/patients/service.ts:115-122` (`updatePatient`), called from
+  `routes.ts:96`.
+- Why: the unique index `patients_national_id_unique` throws, and the generic handler answers
+  `500 "Erreur interne"`. Creation handles the same conflict properly with a 409. On update, the user
+  is never told that the CIN is already taken.
+- Fix: check for another patient with that CIN first (or catch 23505 on that index) and answer 409
+  "Un patient existe déjà avec ce CIN". Add an integration test.
 
-6. **apps/api/src/modules/organizations/routes.ts:92**: creating a new user account (with a password chosen by the admin) writes no audit entry of its own. Only `membership.create` is logged.
-   - Scenario: a center admin creates accounts through add-member. Searching `audit_logs` for `entity_type='user'` finds no creation event, and nothing records who chose the initial credentials.
+### 2. Optional fields can never be cleared (medium)
 
-7. **docker-compose.yml:34**: `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` stay in the environment of the long-running `api` container.
-   - Scenario: anyone with `docker inspect` or `/proc/1/environ` access can read the super-admin password in plaintext for as long as the container runs. There is no endpoint to change the password, so the seeded one stays valid. Pass the values only to the one-off `docker compose exec -e … api node dist/seed.js` instead.
+- Where: `apps/web/src/components/patients/patient-form.tsx:29` (`empty` → `undefined`) and
+  `packages/shared/src/schemas/patients.ts:13, 41-44`.
+- Why: an emptied field is dropped from the PATCH, and the schema doesn't accept `null`. A wrong phone
+  number or CIN can't be removed: the API answers 200 and the old value stays.
+- Fix: make the optional fields `.nullable()` in the update schema, and have the form send `null` for
+  an emptied field in edit mode. Add a test (`{ phone: null }` gives `phone: null`, with the change in
+  the audit).
 
-8. **apps/api/src/db/migrate.ts:10**: the fallback migrations folder `../../drizzle` is relative to `import.meta.url`. That is correct from `src/db/migrate.ts` but wrong from the bundled `dist/migrate.js`.
-   - Scenario: `pnpm --filter @medical-ins/api start` (package.json `start`) without `MIGRATIONS_DIR` resolves to `apps/drizzle`, and `migrate()` fails with "Can't find meta/_journal.json". Only the Docker image works, because it sets `MIGRATIONS_DIR`.
+### 3. `POST /:patientId/link` lets any center attach any patient (medium, owner decision)
 
-9. **apps/api/src/db/migrate.ts:17**: the main-module check `import.meta.url === \`file://${process.argv[1]}\``misses whenever the path is percent-encoded (spaces, accents such as`Développement/`) or reached through a symlink (`import.meta.url`is the real path,`argv[1]` is not).
-   - Scenario: `pnpm db:migrate` in such a checkout does nothing and exits 0 without printing "Migrations applied", leaving an unmigrated database. Fix: compare against `pathToFileURL(process.argv[1]).href`, or move the CLI into a separate entry file.
+- Where: `apps/api/src/modules/patients/routes.ts:69-88`; the ids come from the duplicate 409 in
+  `service.ts` (`findDuplicates`).
+- Why: the roadmap gives a center access through creation, an appointment or a consultation. This is
+  a fourth path with no precondition. A receptionist who enters a CIN out of curiosity gets the holder's
+  name, birth date and id from the 409, and then their phone and address through `/link`. The link is
+  audited, but nothing prevents it.
+- Fix: either record it in the decision log as the intended flow, or narrow it. For example, re-run
+  the duplicate match on the server in `/link` (require the creation payload), and answer a CIN-only
+  probe without a summary unless the name also matches.
 
-10. **docker-compose.yml:29**: `DATABASE_URL` is built from `${POSTGRES_PASSWORD}` without URL-encoding.
-    - Scenario: following the README ("changer les mots de passe") with a generated password containing `@`, `#`, `/`, `?` or `%` gives a malformed or misparsed URL. The API then fails at startup in `env.ts` or connects with the wrong credentials, while the `db` container starts fine.
+### 4. A date that doesn't exist (`2023-02-30`) returns a 500 (low)
 
-11. **apps/api/test/helpers.ts:10**: the integration tests read `process.env.TEST_DATABASE_URL`, but nothing loads the repository `.env` for `vitest run`. Vitest does not put arbitrary `.env` variables into `process.env`.
-    - Scenario: a developer follows the README (`cp .env.example .env`, which defines `TEST_DATABASE_URL`, then `pnpm test`). Every API integration suite is skipped by `describe.skipIf`, and the run is still green.
+- Where: `packages/shared/src/schemas/patients.ts:11`. See C above.
 
-12. **apps/web/src/pages/OrganizationsPage.tsx:55**: the list query's error is never rendered, and nothing handles 401 globally.
-    - Scenario: the session expires after 12 h (the `me` query is never refetched, since focus refetch is off), or the API returns 403/500. The page shows an empty "Organisations" table with no message, and the user is never sent back to the login page.
+### 5. "Future birth date" is checked against UTC (low)
 
-13. **apps/api/src/modules/organizations/routes.ts:92**: "find user by email, then insert" is a race. Two concurrent add-member calls for the same new email both see no user.
-    - Scenario: the second insert violates `users_email_unique`. The error handler maps that to a 500 "Erreur interne" instead of 409, or instead of reusing the account.
+- Where: `packages/shared/src/schemas/patients.ts:19`, `patient-form.tsx:80`. Between 00:00 and 03:00
+  local time, a baby born today is refused. See A above.
 
-14. **apps/web/src/Layout.tsx:9**: when `/auth/me` fails with anything other than 401 (API down, 500, network error), `data` is `undefined`, and the layout redirects to `/login` as if the user were logged out.
-    - Scenario: during a short API outage, logged-in users are sent to the login form, and their login attempts fail with "Erreur interne". The outage looks like a lost session.
+### 6. The duplicate check can be raced, and is skipped on update (low)
 
-15. **apps/web/nginx.conf:11**: `index.html` is served with no `Cache-Control`, so browsers can cache it heuristically (Last-Modified plus ETag).
-    - Scenario: after a redeploy, a browser keeps the old `index.html`, which references hashed `/assets/*` files that no longer exist in the new image. The result is a blank page until a hard refresh. Add `Cache-Control: no-cache` for `index.html`.
+- Where: `routes.ts:38-64` (the check runs before and outside the transaction) and `routes.ts:96`.
+- Why: two receptions registering the same person without a CIN at the same moment both create a
+  record. A PATCH that changes the name or birth date into an existing person's values is not checked.
+  (The CIN race is handled correctly by `onConflictDoNothing`.)
+- Fix: accept it as a soft check and say so, or take
+  `pg_advisory_xact_lock(hashtext(lower(last_name) || birth_date))` inside the transaction and re-run
+  the check there.
 
-## Below the 15-finding cap
+### 7. Tests missing (low)
 
-These are lower priority; correctness findings take precedence when the cap applies.
+- `patient.link` audit (written once, not again on a second link).
+- PATCH from an unlinked center (404): the IDOR guard for writes has no test.
+- `/link` for an unknown patient (404) and by a role without `patient.create` (403).
+- An insurer member calling a center's patient route.
+- PATCH with a CIN that's already taken (finding 1).
 
-- **Conventions (`~/.claude/CLAUDE.md`, "Git attribution")**: the rule says "Do NOT append the `Co-Authored-By: Claude <...>` trailer to commit messages" and "Do NOT add `🤖 Generated with [Claude Code](https://claude.com/claude-code)` (or any "Generated with Claude Code" credit) to PR bodies". Commit 0cc65ac ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>` and `Claude-Session: …`, and its author is `Claude <noreply@anthropic.com>`. The PR #1 body ends with `_Generated by [Claude Code](https://claude.ai/code/session_…)_`.
-- **Efficiency**, `apps/api/src/plugins/auth.ts:18`: the `onRequest` hook runs 3 sequential queries (session, user, memberships) on every request that has a cookie, including `/api/health`. It also runs before the route-level rate-limit hook on login. A single join would do, or loading lazily in `requireUser`.
-- **Efficiency**, `apps/api/src/modules/organizations/routes.ts:97`: the argon2 hash is computed inside `db.transaction`, which holds a pooled connection for the length of the hash. Hash before opening the transaction.
-- **Reuse**, `apps/web/src/pages/HomePage.tsx:25`, `OrganizationsPage.tsx:6` and `:44`: the organization type labels are written three times. Add an `ORGANIZATION_TYPE_LABELS` next to `ROLE_LABELS` in `packages/shared/src/roles.ts`.
-- **Reuse**, `apps/api/src/modules/organizations/routes.ts:14`: `addMemberInputSchema` lives in the API, while `createOrganizationInputSchema` is in `packages/shared/src/schemas/organizations.ts`. The web app will need it.
-- `packages/shared/src/schemas/organizations.ts:14`: `organizationSchema` types `taxId`, `region` and `address` as `string | undefined`, but the API returns `null`, so the type contract is wrong (and `updatedAt` is missing).
-- `apps/api/src/lib/session.ts`: expired sessions are never purged, so the table grows without bound.
-- `apps/api/test/organizations.test.ts`: the tests log in about 6 times per file against a 10/min per-IP limit. A few more tests will start getting 429s.
-- `apps/web/src/main.tsx:23`: the `/organizations` route is not guarded. Non-super-admins can open it and see the create form, which then returns 403.
-- `apps/api/src/db/seed.ts:15`: an existing user with the seed email is neither promoted to super admin nor updated, but the script still reports "already exists".
-- `apps/api/src/env.ts:8`: `COOKIE_SECURE` defaults to `false` even when `NODE_ENV=production`.
-- `apps/api/package.json:7`: `--env-file-if-exists` needs Node 22.9 or later, but `engines` allows `>=22`.
-- `apps/web/src/lib/api.ts:14`: spreading `init.headers` drops headers passed as a `Headers` instance.
+### 8. The duplicate warning title is wrong for a CIN conflict (nit)
+
+- Where: `apps/web/src/components/patients/duplicate-warning.tsx:18`. The title always says « Ce patient
+  semble déjà enregistré », even when the CIN is a certain match. Show the API message instead.
+
+## PR #5: affiliations
+
+### 9. The holder number index counts rejected and expired rows (high)
+
+- Where: `apps/api/drizzle/0004_affiliations.sql:24`, `apps/api/src/db/schema.ts:156`,
+  `service.ts:54-66` (`insertAffiliation`).
+- Why: `UNIQUE (insurer_id, member_number) WHERE holder_status = 'holder'` ignores the status and the
+  dates, and there is no way to cancel a declaration.
+  - A wrong declaration that the insurer rejects blocks the number forever: the real holder gets 409 at
+    every center.
+  - A corrected re-declaration after a rejection gets 409.
+  - Renewing a validated affiliation that has ended gets 409.
+  - The 409 also confirms to any receptionist that someone holds that number.
+- Fix: one number belongs to one person, not to one row. Use
+  `EXCLUDE USING gist (insurer_id WITH =, member_number WITH =, patient_id WITH <>) WHERE (holder_status = 'holder' AND status <> 'rejected')`
+  (`btree_gist`, already created by #6), plus a way to withdraw a pending declaration. Add tests for
+  re-declaration after a rejection and for a second period for the same holder.
+
+### 10. Two concurrent decisions: the second one overwrites the first (medium)
+
+- Where: `apps/api/src/modules/affiliations/service.ts:70-86` (`decideAffiliation`). See B above.
+- Why: two managers click Valider and Refuser at the same moment. Both get 200, two audit entries are
+  written, and the final state contradicts the first confirmed decision. This breaks "decisions are
+  final".
+
+### 11. « Couvert aujourd'hui » uses the UTC date (medium)
+
+- Where: `packages/shared/src/schemas/dates.ts:10` (`today`), used in `PatientPage.tsx`. See A above.
+  It's the shared active-coverage rule, so coverage requests (P3) would inherit the wrong day.
+
+### 12. The insurer list sends more than a decision needs (low)
+
+- Where: `service.ts:14` (`withInsurerName` spreads every column) and its use in the insurer list.
+- Why: the insurer receives `declaredByOrganizationId` (which center the patient visits, which can hint
+  at a specialty), `patientId` and timestamps. Medical-content-adjacent data should be opt-in.
+- Fix: select an explicit projection for the insurer view, and assert the top-level keys in the test.
+
+### 13. The insurer list has no limit (low)
+
+- Where: the insurer list in `service.ts` (no `limit`). The "Validée" tab of a large insurer such as
+  OSTIE returns everything in one response. Add a limit plus pagination, and a member-number filter.
+
+### 14. The reject body is validated before the access check (low)
+
+- Where: `apps/api/src/modules/affiliations/routes.ts:101`. An anonymous caller sending `{}` gets 400
+  instead of 401/403. Check the permission first.
+
+### 15. The declaration dialog reopens with the previous values (low)
+
+- Where: `apps/web/src/components/affiliations/declare-affiliation-dialog.tsx` (`onSuccess` only closes
+  it). Declaring a second insurer starts from the first one's insurer, number and dates, which invites
+  a duplicate. Reset the form on success, or key it.
+
+### 16. Tests missing (low)
+
+- Re-declaration after a rejection, and the decide race (findings 9 and 10).
+- `GET …/patients/:id/affiliations` from an unlinked center.
+- Member-number search not returning another center's patient (only the positive case is tested).
+- Dependents declared twice are not deduplicated: either test that this is intended, or reject it.
+
+## PR #6: appointments
+
+### 17. Reschedule checks the state outside the transaction (medium)
+
+- Where: `apps/api/src/modules/appointments/routes.ts:82-114`. `before` is read with `db` before the
+  transaction, and the UPDATE filters on `id` only. See B above.
+- Why: a reschedule running at the same moment as a cancellation gives the cancelled appointment a new
+  time, and the audit's `before` says `scheduled`. An appointment whose start passes between the check
+  and the write can also be moved.
+
+### 18. Concurrent status changes: the last one wins (medium)
+
+- Where: `routes.ts:116-140`. `findAppointment(tx, …)` takes no lock. See B above.
+- Why: « Arrivé » and « Annuler » clicked at the same moment both commit. The row ends up `cancelled`,
+  freeing the slot under a patient who is in the building.
+
+### 19. Acceptance criteria only partly met (medium)
+
+- No week view: `AgendaPage.tsx` shows one day only, and P2.3 requires day and week per doctor.
+- No « mes rendez-vous » list for the doctor: the agenda only pre-filters one day on the doctor's own
+  id.
+- Rescheduling exists in the API but has no screen.
+- Fix: add them, or record in the roadmap what is deferred.
+
+### 20. Status changes ignore the time (low)
+
+- Where: `routes.ts:116-140`, `packages/shared/src/schemas/appointments.ts` (status rules).
+- Why: `no_show` and `completed` are accepted on an appointment weeks away (the test does exactly that,
+  with an appointment in 2099). A mis-click on « Absent » frees the doctor's slot for good.
+- Fix: allow `arrived`, `no_show` and `completed` only once `starts_at` has passed (or is close),
+  checked with server time.
+
+### 21. An inactive doctor can still be booked (low)
+
+- Where: `apps/api/src/modules/appointments/service.ts:62` (`requireDoctorOf`). `listDoctors` filters
+  on `users.isActive` (line 56), but `requireDoctorOf` doesn't, so the API accepts a deactivated doctor.
+  Share one query between the two functions.
+
+### 22. Tests missing (low)
+
+- Rescheduling a past appointment (the core "can't move a past appointment" criterion).
+- Rescheduling to a doctor of another center.
+- Center B reading or changing center A's appointment id (404).
+- A non-`doctor` member refused as the doctor.
+- Audit entries for reschedules and status changes (only `appointment.create` is checked).
+
+### 23. The agenda keeps stale state (low)
+
+- `AgendaPage.tsx`: the doctor filter is set once. Switching center keeps `doctorId = me` where I'm not
+  a doctor, which gives an empty agenda.
+- `book-appointment-dialog.tsx`: the date is set once. After moving the agenda to another day,
+  « Nouveau rendez-vous » still opens on the first day shown.
+- Fix: key the filter on `centerId`, and reset the date when the dialog opens.
+
+### 24. Unbounded lists (low)
+
+- `GET /appointments` without `from`/`to` returns every appointment the center has ever had, and the
+  patient card asks for all of them. Require a range, or add a limit.
+
+### 25. Smaller points (nit)
+
+- `SLOT_HOLDING_STATUSES` (`packages/shared/src/schemas/appointments.ts`) is exported but unused, and
+  its content is repeated by hand in `0006_appointments_no_overlap.sql`. Delete it, or point to it as
+  the source of the SQL list.
+- `use-center-param.ts`: `setCenterId` now keeps the other query params. That's a behavior change
+  inside a `refactor:` commit.
+- Owner decision: `appointment.read` lets reception see the reason (« Fièvre » is medical). It is
+  coherent, since reception types the reason, but it should be recorded in the decision log as an
+  exception to "care roles only".
+
+## PR #7: consultations
+
+### 26. Full medical content is copied into the append-only audit log (high)
+
+- Where: `apps/api/src/modules/consultations/routes.ts:129-149` (`consultation.update` stores `before`
+  and `after`, full consultations), `:196-212` (`consultation.addendum` stores the addendum text),
+  `:113` (`consultation.create`).
+- Why: `audit_logs` can never be corrected or purged. Every draft save adds another complete copy of
+  the examination, notes, vitals and diagnoses. Roadmap P1.8 gives center admins their organization's
+  audit entries, and `center_admin` has no `medical_record.read`. Once P1.8 ships, the audit screen
+  becomes a way to read every patient's notes. That breaks "medical content is for care roles only".
+  The leak is latent until P1.8.
+- Fix: audit ids and metadata only, as the appointment routes do: changed field names, diagnosis codes
+  at most, the addendum id. Add a test that no audit payload contains `examination`, `notes`, `vitals`
+  or `content`.
+
+### 27. Sign and edit race: a signed record can end up with different diagnoses (medium, plausible)
+
+- Where: `apps/api/src/modules/consultations/service.ts:144` (`requireOwnDraft`, a plain SELECT).
+  See B above.
+- Why: a PATCH that only changes diagnoses doesn't lock the consultation row. A concurrent `/sign`
+  checks the old diagnoses and commits. The diagnoses trigger already ran while `signed_at` was still
+  NULL. The result is a signed record whose diagnoses changed after signing, possibly with no primary
+  diagnosis. Two concurrent signs give a 500 instead of a 409. This follows from Postgres locking rules
+  but hasn't been reproduced.
+- Fix: `SELECT … FOR UPDATE` in `requireOwnDraft` (PATCH, sign and addenda), and map the trigger's
+  exception to a 409.
+
+### 28. The list read isn't audited as `medical_record.read` (low)
+
+- Where: `routes.ts:45-60` (action `medical_record.list`, with only the patient id). P2.4 says every read
+  is audited as `medical_record.read`. The list shows the reason and the primary diagnosis across every
+  linked center, and the audit trail can't say which consultations were shown.
+- Fix: use `medical_record.read` with the returned ids, or record the separate action in the decision
+  log.
+
+### 29. Mutation responses return the full record without a read audit (low)
+
+- Where: `routes.ts:196-212`. `POST …/addenda` returns the whole signed consultation (another doctor's
+  examination and notes included) and only audits `consultation.addendum`. It isn't a privilege
+  escalation, since writers also read, but it bypasses "every read audited". Return only the addendum
+  and let the client refetch through the audited GET.
+
+### 30. The editor appears for a draft that can't be edited from this center (low)
+
+- Where: `apps/web/src/pages/ConsultationPage.tsx:46` (editor whenever `!c.signedAt`). A doctor in
+  centers A and B who opens their A draft with `?centre=B` gets an editor where every save answers 404.
+- Fix: show the editor only when `c.organizationId === centerId` and
+  `canIn(user, centerId, 'medical_record.write')`. Otherwise show the read-only record.
+
+### 31. Trigger tests missing (low)
+
+- INSERT of a diagnosis on a signed consultation, DELETE of a signed consultation, DELETE of an
+  addendum, a draft still editable and deletable, and the race in finding 27.
+
+### 32. The ICD-10 seed's provenance (nit)
+
+- Where: `apps/api/drizzle/0009_icd10_starter.sql:1` says the labels were "written for this project",
+  yet many match the WHO/ATIH French wording. Record the source and license in the decision log before
+  P1.5 imports the full table.
+
+## PR #8: super admin without medical access
+
+### 33. A deny-list: future medical permissions are open to the super admin by default (low)
+
+- Where: `packages/shared/src/roles.ts` (`MEDICAL_PERMISSIONS`, `superAdminBypasses`).
+- Why: the rule fails open. A permission added later that carries medical content is open to the super
+  admin until someone remembers to add it to the list. Examples: `coverage_request.decide` (P3.3, where
+  the medical advisor sees the diagnosis and acts), and document reads (P2.6). `appointment.read` (the
+  reason) already bypasses.
+- Fix: invert it, with an allow-list of what super admin status alone grants (`org.members.manage`,
+  `patient.read_admin`, …). Add a test that every permission is classified, so a new one breaks it.
+
+The mechanism itself is sound: `requirePermission` is the only place that grants super admin access
+(`requireSuperAdmin` stays for accounts and organizations). A super admin with a care role keeps that
+role's access. The integration test covers read, list and create.
+
+## PR #9: Animate.css
+
+### 34. A second animation library for one fade (low, owner decision)
+
+- Where: `apps/web/src/index.css:4`, `apps/web/src/Layout.tsx`.
+- Why: Animate.css is 95 KB of CSS (5.9 KB gzip), 97 keyframes for one `fadeIn`, and Tailwind doesn't
+  remove the unused rules. `tw-animate-css`, already installed, does the same with
+  `motion-safe:animate-in motion-safe:fade-in`. That goes against KISS/YAGNI and the 3G budget (P6.7).
+- Fix: if the PR title means Animate.css was a deliberate choice, keep it and record it in the decision
+  log. Otherwise use the `tw-animate-css` utilities and drop the dependency.
+
+Fine as it is:
+
+- Keying `<main>` on `pathname` only remounts on a path change, and the routes are flat, so no nested
+  state is lost.
+- `?centre=` changes don't replay the fade.
+- Reduced motion is handled: Animate.css cuts animations to 1 ms under
+  `prefers-reduced-motion: reduce`.
+- It is a devDependency, pinned.
+
+## Verdict
+
+- **#4:** fix 1 and 2 before merging; #3 needs the owner's decision.
+- **#5:** fix 9 (data model) and 10 before merging, since the index is hard to change once real
+  declarations exist.
+- **#6:** fix 17 and 18 (the shared fix B); finding 19 means P2.3 isn't complete.
+- **#7:** fix 26 before any real data is written. The audit log can't be cleaned afterwards.
+- **#8:** mergeable; 33 is a small hardening.
+- **#9:** mergeable once the owner settles 34.
