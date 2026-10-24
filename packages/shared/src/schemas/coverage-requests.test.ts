@@ -5,6 +5,9 @@ import {
   type CoverageRequestStatus,
   FINAL_STATUSES,
   canTransition,
+  createCoverageRequestInputSchema,
+  submissionProblem,
+  updateCoverageRequestInputSchema,
   transitionInputSchema,
   transitionProblem,
 } from './coverage-requests.js';
@@ -128,5 +131,66 @@ describe('transitionProblem', () => {
   it('reads today in Madagascar by default, a day ahead of UTC late at night', () => {
     vi.useFakeTimers({ now: new Date('2026-11-30T22:30:00Z') });
     expect(transitionProblem('granted', { to: 'used' }, request)).toMatch(/expiré/);
+  });
+});
+
+const uuid = '00000000-0000-4000-8000-000000000001';
+const draft = {
+  patientId: uuid,
+  affiliationId: uuid,
+  diagnosisCode: 'b54',
+  items: [{ actCode: 'CONS-GEN', quantity: 1 }],
+};
+
+describe('createCoverageRequestInputSchema', () => {
+  const ok = (input: unknown) => createCoverageRequestInputSchema.safeParse(input).success;
+
+  it('accepts a request with 1 to 30 lines, an optional unit price, and normalizes the code', () => {
+    expect(createCoverageRequestInputSchema.parse(draft).diagnosisCode).toBe('B54');
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 2, unitPrice: 30000 }] })).toBe(true);
+    expect(ok({ ...draft, items: Array(30).fill(draft.items[0]) })).toBe(true);
+  });
+
+  it('refuses no line, too many, a bad quantity or price, or a bad diagnosis code', () => {
+    expect(ok({ ...draft, items: [] })).toBe(false);
+    expect(ok({ ...draft, items: Array(31).fill(draft.items[0]) })).toBe(false);
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 0 }] })).toBe(false);
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 1.5 }] })).toBe(false);
+    expect(ok({ ...draft, items: [{ actCode: 'ECG', quantity: 1, unitPrice: 0 }] })).toBe(false);
+    expect(ok({ ...draft, diagnosisCode: 'paludisme' })).toBe(false);
+  });
+});
+
+describe('updateCoverageRequestInputSchema', () => {
+  it('takes any of affiliation, diagnosis and lines, but at least one', () => {
+    expect(updateCoverageRequestInputSchema.safeParse({ diagnosisCode: 'J00' }).success).toBe(true);
+    expect(updateCoverageRequestInputSchema.safeParse({ items: draft.items }).success).toBe(true);
+    expect(updateCoverageRequestInputSchema.safeParse({}).success).toBe(false);
+    expect(updateCoverageRequestInputSchema.safeParse({ patientId: uuid }).success).toBe(false);
+  });
+});
+
+describe('submissionProblem', () => {
+  const active = { status: 'validated' as const, startsOn: '2026-01-01', endsOn: null };
+  const complete = { diagnosisCode: 'B54', itemCount: 1 };
+
+  it('submits a complete request under an affiliation active that day', () => {
+    expect(submissionProblem(active, complete, '2026-10-24')).toBeNull();
+  });
+
+  it('refuses an affiliation pending, rejected, withdrawn or outside its dates', () => {
+    for (const status of ['pending', 'rejected', 'withdrawn'] as const) {
+      expect(submissionProblem({ ...active, status }, complete, '2026-10-24')).toMatch(
+        /affiliation/i,
+      );
+    }
+    expect(submissionProblem(active, complete, '2025-12-31')).toMatch(/affiliation/i);
+    expect(submissionProblem({ ...active, endsOn: '2026-10-23' }, complete, '2026-10-24')).toMatch(
+      /affiliation/i,
+    );
+  });
+
+  it('refuses a request with no line', () => {
+    expect(submissionProblem(active, { ...complete, itemCount: 0 }, '2026-10-24')).toMatch(/acte/);
   });
 });

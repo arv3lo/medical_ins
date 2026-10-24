@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { type Affiliation, isAffiliationActive } from './affiliations.js';
+import { icd10CodeSchema } from './consultations.js';
 import { isoDateSchema, today } from './dates.js';
 
 /** Life cycle of a coverage request (prior approval), roadmap P3. */
@@ -130,5 +132,47 @@ export function transitionProblem(
   if (input.to === 'used' && (!request.validUntil || day > request.validUntil)) {
     return "L'accord a expiré";
   }
+  return null;
+}
+
+/** A line asked for; without `unitPrice`, the act's reference price applies. */
+export const coverageRequestItemInputSchema = z.object({
+  actCode: z.string().trim().toUpperCase().min(1).max(30),
+  quantity: z.number().int('Quantité entière').min(1, 'Quantité invalide'),
+  unitPrice: amountSchema.optional(),
+});
+
+const itemsSchema = z
+  .array(coverageRequestItemInputSchema)
+  .min(1, 'Au moins un acte')
+  .max(30, '30 actes au plus');
+
+export const createCoverageRequestInputSchema = z.object({
+  patientId: z.string().uuid(),
+  affiliationId: z.string().uuid(),
+  diagnosisCode: icd10CodeSchema,
+  items: itemsSchema,
+});
+export type CreateCoverageRequestInput = z.infer<typeof createCoverageRequestInputSchema>;
+
+/** Editing a draft or a request awaiting more information; `items` replaces every line. */
+export const updateCoverageRequestInputSchema = z
+  .object({ affiliationId: z.string().uuid(), diagnosisCode: icd10CodeSchema, items: itemsSchema })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Aucune modification');
+export type UpdateCoverageRequestInput = z.infer<typeof updateCoverageRequestInputSchema>;
+
+/** What blocks submitting a request to the insurer (FR-004), as a French message, or null. */
+export function submissionProblem(
+  affiliation: Pick<Affiliation, 'status' | 'startsOn' | 'endsOn'>,
+  request: { diagnosisCode: string | null; itemCount: number },
+  day: string = today(),
+): string | null {
+  if (!isAffiliationActive(affiliation, day)) {
+    return "L'affiliation du patient n'est pas active aujourd'hui (validée et dans ses dates)";
+  }
+  if (!request.diagnosisCode) return 'Diagnostic principal requis';
+  if (request.itemCount === 0) return 'Au moins un acte requis';
   return null;
 }
