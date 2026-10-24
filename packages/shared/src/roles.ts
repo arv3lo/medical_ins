@@ -84,6 +84,33 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   insurer_accountant: ['invoice.review'],
 };
 
+/**
+ * What super admin status alone grants, without a role in the organization. Every permission must
+ * be listed, so a new one fails to typecheck until someone decides. Medical content (records,
+ * prescriptions, coverage requests that carry the diagnosis) is reachable only through a role.
+ */
+const SUPER_ADMIN_GRANTS: Record<Permission, boolean> = {
+  'org.members.manage': true,
+  'patient.create': true,
+  'patient.update': true,
+  'patient.read_admin': true,
+  'appointment.read': true,
+  'appointment.manage': true,
+  'medical_record.read': false,
+  'medical_record.write': false,
+  'prescription.dispense': false,
+  'coverage_request.create': false,
+  'coverage_request.decide': false,
+  'invoice.manage': true,
+  'invoice.review': true,
+  'insured.manage': true,
+};
+
+/** Whether being super admin is enough for `permission`, without a role in the organization. */
+export function superAdminBypasses(permission: Permission): boolean {
+  return SUPER_ADMIN_GRANTS[permission];
+}
+
 export function hasPermission(roles: readonly Role[], permission: Permission): boolean {
   return roles.some((role) => ROLE_PERMISSIONS[role].includes(permission));
 }

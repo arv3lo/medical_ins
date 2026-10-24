@@ -473,6 +473,24 @@ describe.skipIf(!TEST_DATABASE_URL)('consultations', () => {
     expect(anonymous.statusCode).toBe(401);
   });
 
+  it('keeps the super admin out of medical content unless they hold a care role', async () => {
+    const consultation = await signed();
+    await createUser(ctx.db, {
+      email: 'root@example.mg',
+      password: 'pass-12345',
+      isSuperAdmin: true,
+    });
+    const root = (await login(ctx.app, 'root@example.mg', 'pass-12345')).cookie;
+    expect((await inject('GET', `${base()}/${consultation.id}`, root)).statusCode).toBe(403);
+    const list = `/api/organizations/${center}/patients/${patientId}/consultations`;
+    expect((await inject('GET', list, root)).statusCode).toBe(403);
+    expect((await start(root)).statusCode).toBe(403);
+    // Administrative routes still answer the super admin.
+    expect(
+      (await inject('GET', `/api/organizations/${center}/patients/${patientId}`, root)).statusCode,
+    ).toBe(200);
+  });
+
   it('never lets an insurer reach medical content', async () => {
     const consultation = await signed();
     const [insurer] = await ctx.db
