@@ -7,7 +7,7 @@ import type { Env } from '../../env.js';
 import { audit } from '../../lib/audit.js';
 import { loadCurrentUser } from '../../lib/current-user.js';
 import { HttpError } from '../../lib/errors.js';
-import { verifyPassword } from '../../lib/password.js';
+import { DUMMY_PASSWORD_HASH, verifyPassword } from '../../lib/password.js';
 import { SESSION_COOKIE, createSession, deleteSession } from '../../lib/session.js';
 import { requireUser } from '../../plugins/auth.js';
 
@@ -18,8 +18,10 @@ export function authRoutes(app: FastifyInstance, { db, env }: { db: Db; env: Env
     async (request, reply) => {
       const input = loginInputSchema.parse(request.body);
       const user = await db.query.users.findFirst({ where: eq(users.email, input.email) });
-      const valid =
-        user?.isActive === true && (await verifyPassword(user.passwordHash, input.password));
+      const active = user?.isActive === true;
+      // Verify even without an active account: the response time must not reveal which exist.
+      const passwordHash = active ? user.passwordHash : await DUMMY_PASSWORD_HASH;
+      const valid = (await verifyPassword(passwordHash, input.password)) && active;
 
       if (!user || !valid) {
         await audit(db, {

@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs } from '../src/db/schema.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { auditLogs, users } from '../src/db/schema.js';
+import * as password from '../src/lib/password.js';
 import { TEST_DATABASE_URL, createUser, login, resetDb, setupTestApp } from './helpers.js';
 
 describe.skipIf(!TEST_DATABASE_URL)('auth', () => {
@@ -33,6 +34,25 @@ describe.skipIf(!TEST_DATABASE_URL)('auth', () => {
       .from(auditLogs)
       .where(eq(auditLogs.action, 'auth.login_failed'));
     expect(entries).toHaveLength(1);
+  });
+
+  it('spends the same password work on unknown and deactivated accounts', async () => {
+    // Otherwise the response time tells which emails have an active account.
+    await ctx.db.update(users).set({ isActive: false }).where(eq(users.email, 'doc@example.mg'));
+    const verify = vi.spyOn(password, 'verifyPassword');
+    try {
+      for (const email of ['nobody@example.mg', 'doc@example.mg']) {
+        const response = await ctx.app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          payload: { email, password: 'correct-horse' },
+        });
+        expect(response.statusCode).toBe(401);
+      }
+      expect(verify).toHaveBeenCalledTimes(2);
+    } finally {
+      verify.mockRestore();
+    }
   });
 
   it('logs in with a case-insensitive email, then logs out', async () => {
